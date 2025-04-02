@@ -1,0 +1,9 @@
+使い方
+(npy_insight.pyでnpy形式の形状を確認する)
+npy_waveform_graph.py
+    はじめに、閾値を決めるために適当な時点の波形を得る
+閾値を決めた後に、それをnpy_gitter_fwhm_ver1.pyに入力してヒストグラムを作成する
+
+npy_Jitter_fwhm_compare.pyによって全ての機能は代替されたので、もうnpy_fwhm_ver1.pyは使う必要はない。
+
+config file を作って条件によってそれぞれのconfigを呼び出す形にすべき
