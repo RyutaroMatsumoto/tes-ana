@@ -1,0 +1,32 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build and Run ConvTrcToCSV",
+            "type": "shell",
+            "command": "/usr/bin/clang",
+            "args": [
+                "${workspaceFolder}/01_trc_to_csv/ConvTrcToCSV.c",
+                "-o",
+                "${workspaceFolder}/01_trc_to_csv/ConvTrcToCSV",
+                "&&",
+                "${workspaceFolder}/01_trc_to_csv/ConvTrcToCSV"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            }
+        }
+    ]
+}
