@@ -2,7 +2,7 @@
 analysis codes for tes and related electronics
 
 # Future improvements
-Hierarchical automated file storage stracture. -> Inrtroduced<br>　
+Hierarchical automated file storage stracture. -> Inrtroduced<br>
 Usage of Julia for faster accurate analysis.
 
 ## data storage
