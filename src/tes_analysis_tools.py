@@ -10,7 +10,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 from scipy.optimize import curve_fit
-
+import numba
+from numba import jit, objmode
+from numpy.fft import fft, fftfreq
+import accelerate_fft as afft
+from scipy.fft import next_fast_len
+import time
 # 物理定数
 kB = 1.380E-23   # ボルツマン定数 [J/K]
 
@@ -566,36 +571,210 @@ def optimal_filter_freq(pulse, model, noise, dt, maxfreq, showplot, verbose):
     return ph_array, hist_data
 
 
+
 # ==============================================
-# スペクトル密度 V/√Hz, A/√Hz の算出
+# スペクトル密度 V/√Hz, A/√Hz の算出 (Batch processing version)
+# ==============================================
+# 引数
+# waves[n, dp] : n波形データ. データ点数は偶数とすること (例 1024点).
+# dt           : サンプリング時間 (sec)
+
+def calculate_spectrum_density_batch_padded(waves: np.ndarray, dt: float):
+    """
+    waves : (n_waveforms, n_samples)  2‑D 配列にしておくこと
+    dt    : サンプリング間隔 [s]
+    """
+    n_waveforms, n_samples = waves.shape
+    # --- 1. FFT 長を決める --------------------------------------------------
+    # vDSP(=Accelerate) は「2 の冪」長しか受け付けない
+    n_fft = 1 << (n_samples - 1).bit_length()   # 次の 2^k へ切り上げ
+    # ↓ 他バックエンド向けに 5‑smooth 長を取りたいときはこっち
+    # n_fft = next_fast_len(n_samples, real=True)  # :contentReference[oaicite:1]{index=1}
+
+    # --- 2. ゼロパディング --------------------------------------------------
+    if n_fft != n_samples:
+        pad = n_fft - n_samples
+        waves = np.pad(waves, ((0, 0), (0, pad)), mode="constant")
+
+    # --- 3. rFFT ------------------------------------------------------------
+    # Accelerate の rfft は NumPy と異なる「パック形式」で返るので unpack が必須
+    X_packed = afft.rfft(waves, axis=1)
+    X = afft.unpack(X_packed) / 2.0            # ← /2 で NumPy と同スケール
+
+    # --- 4. PSD → SD --------------------------------------------------------
+    T   = n_fft * dt          # パディング後の総時間
+    df  = 1.0 / T
+    PS  = np.abs(X) ** 2 / (n_fft ** 2)
+    PS[:, 1:] *= 2.0          # 片側スペクトルなので 2 倍
+    PSD = PS / df
+    SD  = np.sqrt(PSD)
+
+    # --- 5. 周波数軸 ---------------------------------------------------------
+    freq = np.fft.rfftfreq(n_fft, dt)  # afft.rfftfreq でも OK
+
+    return freq, SD
+
+# Optimized calculation function with batch processing+ afft + padding
+def calculate_spectrum_density_batch(waves, dt):
+    """
+    Process multiple waveforms at once using vectorized operations.
+    
+    Parameters:
+    -----------
+    waves : ndarray, shape (n_waveforms, n_samples)
+        Array of waveforms to process
+    dt : float
+        Sampling time interval
+        
+    Returns:
+    --------
+    freq : ndarray
+        Frequency array (same for all waveforms)
+    SD_V : ndarray, shape (n_waveforms, n_freq)
+        Spectrum density for each waveform
+    """
+    n_waveforms, n_samples = waves.shape
+    T = n_samples * dt
+    df = 1.0 / T
+    
+    # Perform batch FFT on all waveforms at once
+    X = afft.rfft(waves, axis=1)  # Use rfft for real input (faster)
+    n_freq = X.shape[1]
+    
+    # Calculate absolute values (magnitude)
+    X_abs = np.abs(X)
+    
+    # Calculate power spectrum
+    PS = X_abs**2 / (n_samples**2)
+    
+    # Double values for single-sided spectrum (except DC component)
+    PS[:, 1:] = PS[:, 1:] * 2.0
+    
+    # Calculate power spectral density
+    PSD = PS / df
+    
+    # Calculate spectrum density
+    SD_V = np.sqrt(PSD)
+    
+    # Calculate frequency array (same for all waveforms)
+    freq = afft.rfftfreq(n_samples, dt)
+    
+    return freq, SD_V
+
+# ==============================================
+# スペクトル密度 V/√Hz, A/√Hz の算出 (Non-Numba version)
 # ==============================================
 # 引数
 # wave[dp] : 1波形データ. データ点数は偶数とすること (例 1024点).
 # dt       : サンプリング時間 (sec)
 
-def spectrum_density(wave, dt, Rf, Mf, Min, showplot, verbose):
+# Optimized calculation function without Numba
+def calculate_spectrum_density_no_numba(x, dt):
+    n = x.size
+    T = n * dt
+    df = 1.0 / T
     
-    x  = wave       # 1波形
-    n  = x.size     # sampling data points
-    T  = n*dt       # total sampling time (sec)
-    fs = 1./dt      # sampling freq (Hz)
-    df = 1./T       # 周波数分解能 (Hz)
+    # FFT
+    X = np.fft.fft(x)
+    N = X.size
+    
+    # |X(k)| [V]
+    half_N = N // 2
+    X_abs = np.abs(X[0:half_N])
+    
+    # パワースペクトル PS = |X|^2 [V^2]
+    PS = X_abs**2 / N**2
+    
+    # 片側スペクトルのため、値を2倍しておく(DC成分以外)
+    PS[1:half_N] = PS[1:half_N] * 2.0
+    
+    # パワースペクトル密度 [V^2/Hz]
+    PSD = PS / df
+    
+    # PSDの平方根をとる -> スペクトル密度 [V/√Hz]
+    SD_V = np.sqrt(PSD)
+    
+    # Calculate frequency array
+    freq = np.fft.fftfreq(n, dt)
+    freq_ = freq[0:half_N]  # 周波数範囲:片側
+    
+    return freq_, SD_V
 
-    time = np.linspace(0, T, n)
+# ==============================================
+# 引数
+# wave[dp] : 1波形データ. データ点数は偶数とすること (例 1024点).
+# dt       : サンプリング時間 (sec)
+
+# Optimized core calculation function with Numba JIT compilation
+@numba.jit(nopython=True, cache=True)
+def _calculate_spectrum_density(x, dt):
+    n = x.size
+    T = n * dt
+    df = 1.0 / T
     
-    if verbose == True:
+    # Use objmode for FFT operations that aren't supported in nopython mode
+    with objmode(X='complex128[:]'):
+        X = fft(x)
+    
+    N = X.size
+    half_N = N // 2
+    
+    # Calculate absolute values
+    X_abs = np.zeros(half_N)
+    for i in range(half_N):
+        X_abs[i] = abs(X[i])
+    
+    # パワースペクトル PS = |X|^2 [V^2]
+    PS = np.zeros(half_N)
+    for i in range(half_N):
+        PS[i] = X_abs[i]**2 / (N**2)
+    
+    # 片側スペクトルのため、値を2倍しておく(DC成分以外)
+    for i in range(1, half_N):
+        PS[i] = PS[i] * 2.0
+    
+    # パワースペクトル密度 [V^2/Hz]
+    PSD = np.zeros(half_N)
+    for i in range(half_N):
+        PSD[i] = PS[i] / df
+    
+    # PSDの平方根をとる -> スペクトル密度 [V/√Hz]
+    SD_V = np.zeros(half_N)
+    for i in range(half_N):
+        SD_V[i] = np.sqrt(PSD[i])
+    
+    return SD_V
+
+def spectrum_density(wave, dt, Rf, Mf, Min, showplot, verbose):
+    x = wave       # 1波形
+    n = x.size     # sampling data points
+    T = n * dt     # total sampling time (sec)
+    fs = 1.0 / dt  # sampling freq (Hz)
+    df = 1.0 / T   # 周波数分解能 (Hz)
+
+    # Calculate frequency array once (outside the optimized function)
+    freq = fftfreq(n, dt)
+    freq_ = freq[0:n//2]  # 周波数範囲:片側
+    
+    if verbose:
         print("---------- Parameters ----------")
         print("n = ", n)
         print("dt = ", dt)
         print("T = ", T)
         print("fs = ", fs)
         print("df = ", df)
+    
+    # Call the optimized calculation function
+    SD_V = _calculate_spectrum_density(x, dt)
+    
+    # Only create plots if showplot is True
+    if showplot:
+        time = np.linspace(0, T, n)
         
-    # wave plot
-    if showplot == True:
+        # Wave plot
         fig = plt.figure(figsize=(9, 6))
         plt.rcParams['font.size'] = 14
-        plt.rcParams['font.family']= 'sans-serif'
+        plt.rcParams['font.family'] = 'sans-serif'
         plt.rcParams['font.sans-serif'] = ['Arial']
         
         plt.plot(time, x, color='red', linewidth=0.5)
@@ -604,158 +783,22 @@ def spectrum_density(wave, dt, Rf, Mf, Min, showplot, verbose):
         plt.grid()
         plt.savefig("./Noise.png")
         plt.show()
-
-    # FFT
-    X = np.fft.fft(x) # 離散フーリエ変換
-    
-    N = X.size
-    freq = np.fft.fftfreq(n, dt)  # frequency (Hz)
-
-    if verbose == True:
-        print("N = ", N)
-
-    if verbose == True:
-        print("---------- Check Perseval's theorem ----------")
-        print("Σ|x|^2       = ", np.sum(x**2) )
-        print("1/N * Σ|X|^2 = ", np.sum(np.abs(X)**2) / N )
-    
-
-    # -----------------------------------
-    # 直流成分
-    if verbose == True:
-
-        print("---------- FFT Frequency component ----------")
-        print("*** DC component ***")
-        print("[k = 0]: freq = ", freq[0], ", F[k] = ", X[0])
-        print("")
-
-    # フーリエ変換成分（複素数）, 正負の周波数で複素共役になっている.
-    if verbose == True:
         
-        # 正の周波数 k = 1 ~ N/2
-        print("*** Positive freq ***")
-        print("[k = 1]:       freq = ", freq[1], ", F[k] = ", X[1])
-        print("[k = 2]:       freq = ", freq[2], ", F[k] = ", X[2])
-        print("[k = 3]:       freq = ", freq[3], ", F[k] = ", X[3])
-        print("...")
-        print("[k = N/2 - 2]: freq = ", freq[int(N/2) - 2], ", F[k] = ", X[int(N/2) - 2])
-        print("[k = N/2 - 1]: freq = ", freq[int(N/2) - 1], ", F[k] = ", X[int(N/2) - 1])
-        print("")
+        # Spectrum density plot
+        fig = plt.figure(figsize=(9, 6))
+        plt.rcParams['font.size'] = 14
+        plt.rcParams['font.family'] = 'sans-serif'
+        plt.rcParams['font.sans-serif'] = ['Arial']
         
-        print("*** Nyquist freq ***")
-        print("[k = N/2] (nyquist freq) : ", freq[int(N/2)], ", F[k] = ", X[int(N/2)])
-        print("")
-
-        # 負の周波数 k = N/2 + 1 ~ N
-        print("*** Negative freq ***")
-        print("[k = N/2 + 1]: freq = ", freq[int(N/2) + 1], ", F[k] = ", X[int(N/2) + 1])
-        print("[k = N/2 + 2]: freq = ", freq[int(N/2) + 2], ", F[k] = ", X[int(N/2) + 2])
-        print("...")
-        print("[k = N - 3]:   freq = ", freq[N-3], ", F[k] = ", X[N-3])
-        print("[k = N - 2]:   freq = ", freq[N-2], ", F[k] = ", X[N-2])
-        print("[k = N - 1]:   freq = ", freq[N-1], ", F[k] = ", X[N-1])
-        
-
-    # -----------------------------------
-    # |X(k)| [V]
-    freq_ = freq[0 : int(N/2)]  # 周波数範囲:片側
-    X_abs = np.abs(X[0 : int(N/2)])
-
-    
-    if showplot == True:
-        fig = plt.figure(figsize=(9, 6))
-        plt.rcParams['font.size'] = 14
-        plt.rcParams['font.family']= 'sans-serif'
-        plt.rcParams['font.sans-serif'] = ['Arial']
-
-        plt.plot(freq_, X_abs, color='red', linewidth=0.5)
-        plt.grid(which='major')
-        plt.grid(which='minor')
-        plt.xscale('log')
-        plt.yscale('log')
-        plt.xlabel("Frequency [$Hz$]")
-        plt.ylabel("|F($\omega$)|")
-        #plt.savefig("./F.png")
-        plt.show()
-
-    
-    # -----------------------------------
-    # パワースペクトル PS = |X|^2 [V^2]
-    # 和がパワーになるように、Nの二乗で規格化
-    PS = X_abs**2 / N**2
-    
-    # (2022/01/14 上記の規格化について説明追加）
-    # どうして上記の規格化をするのかの説明をします.
-    # まず, 信号のパワーは, 時間領域信号の二乗平均値です.
-    # したがって, 離散時間信号では、(1/N) * Σ|x|^2 ということになります.
-    # また, パーセバルの等式は以下となります.
-    # Σ|x|^2 = (1/N) * Σ|X|^2
-    # ここで両辺に1/Nを掛けると,
-    # (1/N) * Σ|x|^2 = (1/N^2) * Σ|X|^2
-    # 左辺は先程述べたように, 時間領域信号の二乗平均値、すなわちパワーを表します.
-    # これが右辺と等しくなるのですが, その右辺はフーリエ変換の二乗和をNの二乗で割った値になっています.
-    # これが, 上記コードでN^2で割っている理由になります.
-    
-    # 片側スペクトルのため、値を2倍しておく(DC成分以外)
-    PS[1 : int(N/2)] = PS[1 : int(N/2)] * 2.0
-
-    if showplot == True:    
-        fig = plt.figure(figsize=(9, 6))
-        plt.rcParams['font.size'] = 14
-        plt.rcParams['font.family']= 'sans-serif'
-        plt.rcParams['font.sans-serif'] = ['Arial']
-
-        plt.plot(freq_, PS, color='red', linewidth=0.5)
-        plt.grid(which='major')
-        plt.grid(which='minor')
-        plt.xscale('log')
-        plt.yscale('log')
-        plt.xlabel("Frequency [$Hz$]")
-        plt.ylabel("Power Spectrum [$V^{2}$]")
-        #plt.savefig("./PS.png")
-        plt.show()
-    
-    # -----------------------------------
-    # パワースペクトル密度 [V^2/Hz]
-    PSD = PS/df
-
-    if showplot == True:    
-        fig = plt.figure(figsize=(9, 6))
-        plt.rcParams['font.size'] = 14
-        plt.rcParams['font.family']= 'sans-serif'
-        plt.rcParams['font.sans-serif'] = ['Arial']
-
-        plt.plot(freq_, PSD, color='red', linewidth=0.5)
-        plt.grid(which='major')
-        plt.grid(which='minor')
-        plt.xscale('log')
-        plt.yscale('log')
-        plt.xlabel("Frequency [$Hz$]")
-        plt.ylabel("Power Spectrum Density [$V^{2} / Hz$]")
-        plt.savefig("./PSD.png")
-        plt.show()
-
-
-    # -----------------------------------
-    # PSDの平方根をとる -> スペクトル密度 [V/√Hz]
-    SD_V = np.sqrt(PSD)
-
-    if showplot == True:
-        fig = plt.figure(figsize=(9, 6))
-        plt.rcParams['font.size'] = 14
-        plt.rcParams['font.family']= 'sans-serif'
-        plt.rcParams['font.sans-serif'] = ['Arial']
-
         plt.plot(freq_, SD_V, color='red', linewidth=0.5)
         plt.grid(which='major')
         plt.grid(which='minor')
         plt.xscale('log')
         plt.yscale('log')
-        plt.xlabel("Frequency [$Hz$]")
-        plt.ylabel("Spectrum density [$V / \sqrt{Hz}$]")
-        #plt.savefig("./SD_V.png")
+        plt.xlabel("Frequency [Hz]")
+        plt.ylabel("Spectrum density [V / √Hz]")
         plt.show()
-
+    
     return freq_, SD_V
         
     # -----------------------------------

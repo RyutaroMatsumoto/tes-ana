@@ -1,3 +1,8 @@
 {
-    "git.ignoreLimitWarning": true
+    "git.ignoreLimitWarning": true,
+    "files.exclude": {
+      "**/__pycache__/": true,
+      "**/*.pyc": true
+      }  
 }
+  
