@@ -1,9 +1,5 @@
 """
 ----------------------
-Utility script to convert Teledyne-LeCroy *.trc binary waveform files into
-
-* one *.npy file containing the raw waveform samples for each trace file
-* a single JSON file holding the metadata for the whole run
 
 Directory layout:
     npy traces  : ../../tes01/generated_data/raw/pXX/rYYY/CZ/CZ_trace.npy
@@ -25,7 +21,7 @@ import logging
 from typing import List
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from processing_functions.process_noise_analysis import process_noise, Mode
+from processing_functions.process_noise_analysis import process_noise, Mode, Padding
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,10 +31,12 @@ logging.basicConfig(
 BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"
 # edit here
 period = "01"
-run = "008"
+run = "006"
 channels = ["1"]  # Channel number, add "Cn" if needed.
-freeCPU = 1  #How many cores will be keep free
-analysis_mode: Mode = "full"  # "quick" or "full"
+# analysis_mode: Mode = "full"  # "quick" or "full"
+padding_mode: Padding = "5_smt_pyfftw" # Either of ["5_smt_pyfftw","5_smt_scupyrfft","pwr_2"]
+CPU_THREADS =os.cpu_count()                    # NUM of CPUs used for FFT
+Batch = 8                       # Num of lines which will be batched together
 Reprocess_noise = True
 
 if __name__ == "__main__":
@@ -49,8 +47,9 @@ if __name__ == "__main__":
             p_id=period,
             r_id=run,
             c_id=channel,
-            fcpu = freeCPU,
             base_dir=BASE_DIR,
-            mode=analysis_mode,
+            padding = padding_mode,
+            threads = CPU_THREADS,
+            Batch = Batch,
             reprocess=Reprocess_noise
         )

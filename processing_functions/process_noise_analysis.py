@@ -21,23 +21,10 @@ logging.basicConfig(
 
 # Define Mode type as a Literal with allowed values
 Mode = Literal["quick", "full"]
+Padding = Literal["5_smt_pyfftw","5_smt_scupyrfft","pwr_2"]
 
-# Define a function to process a single waveform
-def process_waveform(wave_data, dt):
-    #choose 
-    results = fft_funcs.calc_sd_batch(
-        wave_data[np.newaxis,:],
-        dt)
-    return results[0], results[1]
-
-# Function to process a waveform at a specific index
-def process_index(index, data_array, t_interval):
-    wave_data = data_array[index]
-    freq, spectrum = process_waveform(wave_data, t_interval)
-    return index, freq, spectrum
-
-def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path,fcpu:int, mode: Mode, reprocess=True) -> None:
-    logging.info(f"Starting noise processing for p{p_id}_r{r_id}_C{c_id} with mode: {mode}")
+def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Padding, threads:int, Batch:int, reprocess=True) -> None:
+    logging.info(f"Starting noise processing for p{p_id}_r{r_id}_C{c_id} with padding: {Padding}")
     try:
         #input
         raw_dir = base_dir / "generated_data" / "raw" / f"p{p_id}" / f"r{r_id}" / f"C{c_id}"
@@ -55,104 +42,37 @@ def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path,fcpu:int, mode
         logging.info(f"Output directories created: plt_dir={plt_dir}, par_dir={par_dir}")
         
      
-        #load array data from raw_dir
-        data_array = np.load(raw_file, allow_pickle=True)
-        logging.info(f"Data loaded successfully. Shape: {data_array.shape}")
+        #load array data from raw_dir　<- Memory Pressure
+        # data_array = np.load(raw_file, allow_pickle=True)
+        # n_waveforms = data_array.shape[0]
+        # logging.info(f"Data loaded successfully. Shape: {data_array.shape}")
         with open(metadata_path, 'r') as f:
             metadata = json.load(f)
-        t_interval = metadata['C1--00000']['time_resolution']['dt']
-        freqs = []
-        sdv = []
+        dt = metadata['C1--00000']['time_resolution']['dt']
         
-        # Determine the number of CPU cores to use (leave how many cores free)
-        num_cores = max(1, multiprocessing.cpu_count() - fcpu)
-        logging.info(f"Using {num_cores} CPU cores for parallel processing")
-
-        # Quick or Full analysis
-        if mode == "quick":
-            logging.info(f"Running quick analysis mode (5 random samples)")
-            # Randomly choose 5 data from data_array
-            if data_array.shape[0] < 5:
-                logging.warning(f"Data array has fewer than 5 samples ({data_array.shape[0]}). Using all available samples.")
-                selected_indices = range(data_array.shape[0])
-            else:
-                selected_indices = random.sample(range(data_array.shape[0]), 5)
-            
-            logging.info(f"Selected indices for analysis: {selected_indices}")
-            # Process waveforms in parallel
-            
-            # Process waveforms in parallel
-            with ProcessPoolExecutor(max_workers=num_cores) as executor:
-                futures = [executor.submit(process_index, index, data_array, t_interval) for index in selected_indices]
-                
-                for i, future in enumerate(futures):
-                    index, freq, spectrum = future.result()
-                    logging.info(f"Processing sample {i+1}/5 (index {index}) completed")
-                    freqs.append(freq)
-                    sdv.append(spectrum)
-                    logging.info(f"Sample {i+1} processed successfully. Frequency array length: {len(freq)}")
-
-        elif mode == "full":
-            # logging.info(f"Running full analysis mode (all {data_array.shape[0]} samples)")
-            # # Process waveforms in parallel
-            
-            # # Process all waveforms in parallel using chunks
-            # total_samples = data_array.shape[0]
-            # chunk_size = max(1, total_samples // (num_cores * 2))  # Process in chunks for better load balancing
-            
-            # for chunk_start in range(0, total_samples, chunk_size):
-            #     chunk_end = min(chunk_start + chunk_size, total_samples)
-            #     chunk_indices = list(range(chunk_start, chunk_end))
-                
-            #     logging.info(f"Processing chunk {chunk_start//chunk_size + 1}/{(total_samples + chunk_size - 1)//chunk_size} (samples {chunk_start+1}-{chunk_end})")
-                
-            #     with ProcessPoolExecutor(max_workers=num_cores) as executor:
-            #         futures = [executor.submit(process_index, i, data_array, t_interval) for i in chunk_indices]
-                    
-            #         for future in futures:
-            #             index, freq, spectrum = future.result()
-            #             freqs.append(freq)
-            #             sdv.append(spectrum)
-                        
-            #             if index % 20 == 0:  # Log every 20th sample
-            #                 logging.info(f"Sample {index+1} processed successfully. Frequency array length: {len(freq)}")
-            
-            #afft用　
-            n_waveforms = data_array.shape[0]
-            logging.info(f"Running full analysis mode (all {n_waveforms} samples)")
-            # ---- 1. vDSP スレッドを全コアに設定 -----------------------------------
-            afft.set_nthreads(os.cpu_count())
-
-            # ---- 2. バッチ FFT を一発で回す ---------------------------------------
-            freq, sdv_ = fft_funcs.calc_sd_batch_padded(data_array, t_interval)
-
-            # ---- 3. 必要ならここで結果をリストに格納 ------------------------------
-            # （旧コード互換のために list へコピー）
-            freqs  = [freq] * n_waveforms
-            sdv = [sdv_[i] for i in range(n_waveforms)]
-
-            logging.info("All samples processed in a single batch")
-            
+        logging.info(f"Running full analysis mode")
+        if padding == "5_smt_pyfftw": #5 smothing
+            freq, sdv, _ = fft_funcs.fivesmt_pyfftw(raw_file, dt, threads,Batch)
+        if padding == "5_smt_scupyrfft": #5 smothing
+            freq, sdv, _ = fft_funcs.fivesmt_scupyrfft(raw_file, dt, threads, Batch)
+        elif padding == "pwr_2": #afft
+            freq, sdv, _ = fft_funcs.pwrtwo_fft(raw_file, dt, threads)
         else:
-            logging.error(f"Invalid mode: {mode}. Please use 'quick' or 'full'.")
+            logging.error(f"Invalid mode: {padding}. Please use '5_smt' or 'pwr_2'.")
 
         # スペクトル密度データを配列に変換
         logging.info(f"Processing collected data. Number of samples processed: {len(sdv)}")
-        if sdv:
-            logging.info("Converting spectrum density data to array")
-            sdv_data = np.array(sdv)
-            logging.info(f"Spectrum density data array shape: {sdv_data.shape}")
-            
+        if sdv is not None:
+            logging.info(f"Spectrum density data array shape: {sdv.shape}")
             # 各周波数でのスペクトル密度の平均を計算
-            mean_sdv = np.mean(sdv_data, axis=0)
-            logging.info(f"Mean spectrum density calculated. Length: {len(mean_sdv)}")
+            mean_sdv = sdv  #already calculated mean
+            logging.info("Mean spectrum density calculated.")
             # 結果をプロット
             fig = plt.figure(figsize=(9, 6))
             plt.rcParams['font.size'] = 14
             plt.rcParams['font.family'] = 'sans-serif'
             plt.rcParams['font.sans-serif'] = ['Arial']
-
-            plt.plot(freqs[0], mean_sdv, color='red', linewidth=0.5)
+            plt.plot(freq, mean_sdv, color='red', linewidth=0.5)
             plt.grid(which='major')
             plt.grid(which='minor')
             plt.xscale('log')
@@ -171,9 +91,9 @@ def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path,fcpu:int, mode
             logging.info("Saving data")
             data_file = par_dir / f"noise_data_C{c_id}.npz"
             np.savez(data_file,
-                    frequencies=freqs[0],
+                    frequencies=freq,
                     mean_spectrum_density=mean_sdv,
-                    all_spectrum_density=sdv_data)
+                    all_spectrum_density=sdv)
             logging.info(f"Data saved to {data_file}")
             
             # Show plot if in interactive mode
