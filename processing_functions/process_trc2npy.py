@@ -12,7 +12,15 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-def parse_trc_file(path: Path) -> Tuple[np.ndarray, Dict[str, Any]]:
+def parse_trc_file_wave(path: Path) -> Tuple[np.ndarray, Dict[str, Any]]:
+    logging.debug("Parsing %s", path)
+    trc = LecroyBinaryWaveform(str(path))
+    
+    waveform = np.asarray(trc.wave_array_1, dtype=np.float32)
+    
+    return waveform
+
+def parse_trc_file_meta(path: Path) -> Tuple[np.ndarray, Dict[str, Any]]:
     logging.debug("Parsing %s", path)
     trc = LecroyBinaryWaveform(str(path))
     
@@ -56,8 +64,8 @@ def parse_trc_file(path: Path) -> Tuple[np.ndarray, Dict[str, Any]]:
             "vertical_vernier": float(trc.VERTICAL_VERNIER),
         }
     }
-    return waveform, metadata
-
+    return metadata
+    
 def save_waveform(array: np.ndarray, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     np.save(dest, array)
@@ -67,7 +75,7 @@ def append_metadata(meta_dict: Dict[str, Any], dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     with dest.open("w", encoding="utf-8") as fh:
         json.dump(meta_dict, fh, indent=2, ensure_ascii=False)
-    logging.info("Metadata written → %s (%d traces)", dest, len(meta_dict))
+    logging.info("Metadata written → %s (%d channels)", dest, len(meta_dict))
 
 def process_trc2npy(p_id: str, r_id: str, base_dir: Path, reprocess_waveform=True, reprocess_metadata=True) -> None:
     raw_dir = base_dir / "generated_data" / "raw_trc" / f"p{p_id}" / f"r{r_id}"
@@ -78,9 +86,11 @@ def process_trc2npy(p_id: str, r_id: str, base_dir: Path, reprocess_waveform=Tru
 
     trc_files = sorted(raw_dir.glob("C*--Trace--*.trc"))
     if not trc_files:
+        trc_files = sorted(raw_dir.glob("C*--wave--*.trc"))
+    if not trc_files:
         logging.warning("No .trc files found in %s", raw_dir)
         return
-
+    
     channel_files = {}
     for f in trc_files:
         c_id = f.name[1]
@@ -88,36 +98,32 @@ def process_trc2npy(p_id: str, r_id: str, base_dir: Path, reprocess_waveform=Tru
     
     if reprocess_waveform:
         logging.info("Processing waveforms...")
-        for f in trc_files:
-            waveform, _ = parse_trc_file(f)
-            save_waveform(waveform, out_dir / (f.stem + ".npy"))
         
         # Process each channel separately
-        for c_id in channel_files.keys():
-            # Load all files for this channel into a single array
-            channel_data_files = sorted(list(out_dir.glob(f"C{c_id}--Trace--*.npy")))
-            logging.info(f"Found {len(channel_data_files)} files for channel C{c_id}")
+        for c_id, files in channel_files.items():
+            logging.info(f"Processing {len(files)} files for channel C{c_id}")
             
-            if channel_data_files:
-                data_list = []
-                for file_path in channel_data_files:
-                    data = np.load(file_path, allow_pickle=True)
-                    data_list.append(data)
-                
-                # Combine all data into a single array
-                data_array = np.array(data_list)
-                logging.info(f"Loaded {len(data_list)} files for channel C{c_id}, shape: {data_array.shape}")
-                
-                # Create directory if it doesn't exist
-                (out_dir / f"C{c_id}").mkdir(parents=True, exist_ok=True)
-                save_waveform(data_array, out_dir / f"C{c_id}" / f"C{c_id}--Trace.npy")
-
+            # Directly process .trc files into memory without saving individual .npy files
+            data_list = []
+            for file_path in files:
+                waveform = parse_trc_file_wave(file_path)
+                data_list.append(waveform)
+            
+            # Combine all data into a single array
+            data_array = np.array(data_list)
+            logging.info(f"Processed {len(data_list)} files for channel C{c_id}, shape: {data_array.shape}, dtype: {data_array.dtype}")
+            
+            # Create directory if it doesn't exist
+            (out_dir / f"C{c_id}").mkdir(parents=True, exist_ok=True)
+            logging.info("Saving npy file ...")
+            save_waveform(data_array, out_dir / f"C{c_id}" / f"C{c_id}--Trace.npy")
+            logging.info(f"Saved npy file to {out_dir / f'C{c_id}' / f'C{c_id}--Trace.npy'}")
     if reprocess_metadata:
         logging.info("Processing metadata...")
         meta_all = {}
         for c_id, files in channel_files.items():
             first_file = next((f for f in files if "--00000" in f.name), files[0])
-            _, meta = parse_trc_file(first_file)
+            meta = parse_trc_file_meta(first_file)
             meta_all["C" + c_id + "--00000"] = meta
 
         append_metadata(meta_all, meta_path)

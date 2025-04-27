@@ -8,7 +8,7 @@ import json
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Literal, Dict, List
+from typing import Literal, Dict, List,Any
 import accelerate_fft as afft
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src import fft_funcs
@@ -30,7 +30,7 @@ def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Paddi
         raw_dir = base_dir / "generated_data" / "raw" / f"p{p_id}" / f"r{r_id}" / f"C{c_id}"
         raw_file = base_dir / "generated_data" / "raw" / f"p{p_id}" / f"r{r_id}" / f"C{c_id}" / f"C{c_id}--Trace.npy"
         metadata_path = base_dir / "teststand_metadata" / "hardware" /"scope" / f"p{p_id}" / f"r{r_id}" / f"lecroy_metadata_p{p_id}_r{r_id}.json"
-        
+        metadata_time_path = base_dir / "teststand_metadata" / "par" /"fft" / f"p{p_id}" / f"r{r_id}" / f"fft_metadata_p{p_id}_r{r_id}.json"
         logging.info(f"Input paths: raw_dir={raw_dir}, metadata_path={metadata_path}")
         
         #output
@@ -41,32 +41,23 @@ def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Paddi
         par_dir.mkdir(parents=True, exist_ok=True)
         logging.info(f"Output directories created: plt_dir={plt_dir}, par_dir={par_dir}")
         
-     
-        #load array data from raw_dir　<- Memory Pressure
-        # data_array = np.load(raw_file, allow_pickle=True)
-        # n_waveforms = data_array.shape[0]
-        # logging.info(f"Data loaded successfully. Shape: {data_array.shape}")
+        #load metadata
         with open(metadata_path, 'r') as f:
             metadata = json.load(f)
         dt = metadata['C1--00000']['time_resolution']['dt']
-        
-        logging.info(f"Running full analysis mode")
+        #FFT process
+        logging.info(f"Running analysis mode: {padding}")
         if padding == "5_smt_pyfftw": #5 smothing
-            freq, sdv, _ = fft_funcs.fivesmt_pyfftw(raw_file, dt, threads,Batch)
+            freq, sdv, time = fft_funcs.fivesmt_pyfftw(raw_file, dt, threads,Batch)
         if padding == "5_smt_scupyrfft": #5 smothing
-            freq, sdv, _ = fft_funcs.fivesmt_scupyrfft(raw_file, dt, threads, Batch)
+            freq, sdv, time = fft_funcs.fivesmt_scupyrfft(raw_file, dt, threads, Batch)
         elif padding == "pwr_2": #afft
-            freq, sdv, _ = fft_funcs.pwrtwo_fft(raw_file, dt, threads)
+            freq, sdv, time = fft_funcs.pwrtwo_fft(raw_file, dt, threads, Batch)
         else:
-            logging.error(f"Invalid mode: {padding}. Please use '5_smt' or 'pwr_2'.")
+            logging.error(f"Invalid mode: {padding}. Please use '5_smt_pyfftw', '5_smt_scupyfft' or 'pwr_2'.")
 
-        # スペクトル密度データを配列に変換
-        logging.info(f"Processing collected data. Number of samples processed: {len(sdv)}")
         if sdv is not None:
-            logging.info(f"Spectrum density data array shape: {sdv.shape}")
-            # 各周波数でのスペクトル密度の平均を計算
             mean_sdv = sdv  #already calculated mean
-            logging.info("Mean spectrum density calculated.")
             # 結果をプロット
             fig = plt.figure(figsize=(9, 6))
             plt.rcParams['font.size'] = 14
@@ -102,7 +93,40 @@ def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Paddi
         else:
             logging.error("No spectrum density data was collected. Check previous errors.")
 
+        # save time information on metadata_time_path
+        logging.info("Processing metadata...")
+        meta = {
+            "threads":threads,
+            "batch":Batch,
+            "time":time
+        } 
+        append_metadata(meta, metadata_time_path)
+        logging.info(f'time data saved to {metadata_time_path}')
     except Exception as e:
         logging.error(f"Error in process_noise: {str(e)}")
         import traceback
         logging.error(traceback.format_exc())
+
+def append_metadata(meta_dict: Dict[str, Any], dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    
+    # 既存のメタデータを読み込む
+    if dest.exists():
+        with dest.open("r", encoding="utf-8") as fh:
+            try:
+                existing_meta = json.load(fh)
+                if isinstance(existing_meta, list):
+                    existing_meta.append(meta_dict)
+                elif isinstance(existing_meta, dict):
+                    existing_meta = [existing_meta, meta_dict]
+                else:
+                    existing_meta = [meta_dict]
+            except json.JSONDecodeError:
+                existing_meta = [meta_dict]
+    else:
+        existing_meta = [meta_dict]
+    
+    # 更新されたメタデータを保存
+    with dest.open("w", encoding="utf-8") as fh:
+        json.dump(existing_meta, fh, indent=2, ensure_ascii=False)
+    logging.info("Metadata updated → %s (%d entries)", dest, len(existing_meta))

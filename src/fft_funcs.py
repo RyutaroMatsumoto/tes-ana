@@ -47,9 +47,10 @@ def fivesmt_pyfftw(path: Path, dt: float, threads:int, Batch:int):
     #load only needed data
     mmap = np.load(path,mmap_mode="r")
     n_wave, n_orig = mmap.shape     #n_waves: some lines from ndarray, n_orig: original sample points
-    # Find optimal FFT length
+    # Find optimal FFT length 5 smoothing
     n_fft = _find_optimal_fft_length(n_orig)
-    
+    # Find pwr of 2 opt length
+    #n_fft = 1 << (n_orig - 1).bit_length()
     # Calculate time and frequency step
     T = n_fft * dt
     df = 1.0 / T
@@ -148,38 +149,52 @@ def fivesmt_scupyrfft(path: Path, dt: float, threads:int, Batch:int):
 
 
 
-def pwrtwo_fft(waves: np.ndarray, dt: float):
+def pwrtwo_fft(path:Path, dt: float, threads:int, Batch: int):
     """
     waves : (n_waveforms, n_samples)  2‑D 配列にしておくこと
     dt    : サンプリング間隔 [s]
     """
-    afft.set_nthreads(os.cpu_count())
-    n_waveforms, n_samples = waves.shape
-    # --- 1. FFT 長を決める --------------------------------------------------
-    # vDSP(=Accelerate) は「2 の冪」長しか受け付けない
-    n_fft = 1 << (n_samples - 1).bit_length()   # 次の 2^k へ切り上げ
-    # --- 2. ゼロパディング --------------------------------------------------
-    if n_fft != n_samples:
-        pad = n_fft - n_samples
-        waves = np.pad(waves, ((0, 0), (0, pad)), mode="constant")
+    afft.set_nthreads(threads)
+    start_time = time.time()
 
-    # --- 3. rFFT ------------------------------------------------------------
-    # Accelerate の rfft は NumPy と異なる「パック形式」で返るので unpack が必須
-    X_packed = afft.rfft(waves, axis=1)
-    X = afft.unpack(X_packed) / 2.0            # ← /2 で NumPy と同スケール
+    #load only needed data
+    mmap = np.load(path,mmap_mode="r")
+    n_wave, n_orig = mmap.shape     #n_waves: some lines from ndarray, n_orig: original sample points
+    # Find optimal FFT length, afft needs explicit zero padding
+    n_fft = 1 << (n_orig - 1).bit_length()
+    if n_fft != n_orig:
+            pad = n_fft - n_orig
+            mmap = np.pad(mmap, ((0, 0), (0, pad)), mode="constant")
+    freq   = rfftfreq(n_fft, dt)
+    # Calculate time and frequency step
+    T = n_fft * dt
+    df = 1.0 / T
+    n_freq = n_fft//2 + 1
+    mean_psd = np.zeros(n_freq, np.float64)
+    processed=0 #initialize
+    BATCH = Batch                           
+    
+    # ---------- バッチで回す ----------
+    for start in range(0, n_wave, BATCH):
+        end   = min(start + BATCH, n_wave)
+        chunk = mmap[start:end]                      # ★ memmap スライス ― RAM 未展開
 
-    # --- 4. PSD → SD --------------------------------------------------------
-    T   = n_fft * dt          # パディング後の総時間
-    df  = 1.0 / T
-    PS  = np.abs(X) ** 2 / (n_fft ** 2)
-    PS[:, 1:] *= 2.0          # 片側スペクトルなので 2 倍
-    PSD = PS / df
-    SD  = np.sqrt(PSD)
+        # afft needs "unpack" process
+        fx_pack = afft.rfft(chunk, axis=1)
+        fx = afft.unpack(fx_pack) /2.0
+        psd = (np.abs(fx)**2).astype(np.float32) / n_fft**2   # shape (b,n_freq)
+        psd[:, 1:] *= 2.0                                     # 片側補正
 
-    # --- 5. 周波数軸 ---------------------------------------------------------
-    freq = np.fft.rfftfreq(n_fft, dt)  # afft.rfftfreq でも OK
+        mean_psd  += psd.sum(axis=0)                          # バッチを合算
+        processed += psd.shape[0]
 
-    return freq, SD
+    mean_psd /= processed
+    sd        = np.sqrt(mean_psd / df)
+                
+        
+    execution_time = time.time() - start_time
+    
+    return freq, sd, execution_time
 
 def _find_optimal_fft_length(n):
     """

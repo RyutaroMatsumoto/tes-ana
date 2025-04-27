@@ -33,11 +33,11 @@ logging.basicConfig(
 
 # edit here
 period = "01"
-run = "007"
+run = "006"
 REPROCESS_WAVEFORM = True          #True for reprocess, False for skip process for waveforms
 REPROCESS_METADATA = True          #True for reprocess, False for skip process for metadata
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"
+BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"         #tes01 for local directory, tes01_link for SSD directory
 
 if __name__ == "__main__":
     process_trc2npy(
