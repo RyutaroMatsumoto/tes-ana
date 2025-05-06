@@ -53,7 +53,7 @@ def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:in
         metadata = json.load(f)
     dt = metadata['C1--00000']['time_resolution']['dt']
     #output
-    plt_dir = base_dir / "generated_data" / "pyplot" /"wave"/ f"p{p_id}" / f"r{r_id}"
+    plt_dir = base_dir / "generated_data" / "pyplt" /"wave"/ f"p{p_id}" / f"r{r_id}"
     plt_dir.mkdir(parents=True, exist_ok=True)
     par_dir = base_dir / "generated_data" / "pypar" /"wave"/ f"p{p_id}" / f"r{r_id}"
     par_dir.mkdir(parents=True, exist_ok=True)
@@ -99,7 +99,8 @@ def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, 
     # 保存先ディレクトリの設定
     plt_dir = base_dir / "generated_data" / "pyplt" / "wave" / f"p{p_id}" / f"r{r_id}"
     plt_dir.mkdir(parents=True, exist_ok=True)
-    
+    par_dir = base_dir / "generated_data" / "pypar" / "wave" / f"p{p_id}" / f"r{r_id}"
+    par_dir.mkdir(parents=True, exist_ok=True)
     #plot
     plt.figure(figsize=(10, 5))
     
@@ -133,10 +134,15 @@ def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, 
                     continue
             if sample_avg==True:
                 if not trap:
-                    wave_data = np.mean(data, axis=0)  # 行方向（axis=0）に平均を取る
+                    wave_data = np.mean(data, axis=0)  
                     dataname = f'sample_averaging_raw_waveform_p{p_id}_r{r_id}_C{",".join(c_ids)}'
+                    logging.info("Saving data")
+                    data_file = par_dir / f"mean_wave_C{c_id}.npz"
+                    np.savez(data_file,
+                        mean_wave = wave_data)
+                    logging.info(f"Data saved to {data_file}")
                 if trap:
-                    wave_data = trap_filter(np.mean(data, axis=0), dt, rt, ft)  # 行方向（axis=0）に平均を取る
+                    wave_data = trap_filter(np.mean(data, axis=0), dt, rt, ft) 
                     dataname = f'sample_averaging_trap_waveform_p{p_id}_r{r_id}_C{",".join(c_ids)}_rt{rt:.1e}_ft{ft:.1e}'
             # 時間データを生成 (秒単位)
             time_data = np.arange(len(wave_data)) * dt
