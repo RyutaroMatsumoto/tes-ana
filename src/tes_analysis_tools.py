@@ -8,7 +8,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-import math
+import math, json, logging
 from scipy.optimize import curve_fit
 import numba
 from numba import jit, objmode
@@ -16,6 +16,7 @@ from numpy.fft import fft, fftfreq
 import accelerate_fft as afft
 from scipy.fft import next_fast_len
 import time
+from pathlib import Path
 # 物理定数
 kB = 1.380E-23   # ボルツマン定数 [J/K]
 
@@ -298,7 +299,7 @@ def make_average_pulse(pulse, phmin, phmax, timin, timax, normalize, verbose, sh
     
     # 波高値測定
     for i in range(0, n):
-        ph[i] = np.max(pulse[i, timin:timax])
+        ph[i] = np.max((pulse[i, timin:timax]))
 
     pulse_avg = np.zeros(dp)
     cnt = 0
@@ -462,8 +463,8 @@ def shaping_ph_spectrum(pulse, timin, timax, dt, cr, rc, showplot, verbose):
 # hist_data[nbins, 2] : 1列目bin幅中心値, 2列目ヒストグラムカウント値
 
 def optimal_filter_freq(pulse, model, noise, dt, maxfreq, showplot, verbose):
-    print("Optimal filtering started ...")
-        
+    logging.info("Optimal filtering started ...")
+    
     n  = pulse.shape[0]      # num of pulses
     dp = pulse.shape[1]      # data points
     ph_array = np.zeros(n)   # pulse height
@@ -478,13 +479,13 @@ def optimal_filter_freq(pulse, model, noise, dt, maxfreq, showplot, verbose):
 
     X_noise_2 = X_noise_2 / m
     if verbose :
-        print("|N(f)|^2 = ", X_noise_2)
+        logging.info(f"|N(f)|^2 = {X_noise_2}")
 
     # モデルパルスのフーリエ変換の二乗
     X_model = np.fft.fft(model)
     X_model_2 = np.abs(X_model)**2
     if verbose :
-        print("|M(f)|^2 = ", X_model_2)
+        logging.info(f"|M(f)|^2 = {X_model_2}")
 
     # 最適フィルタに利用する周波数上限の指定 (Hz)
     # FFTの結果は
@@ -493,8 +494,8 @@ def optimal_filter_freq(pulse, model, noise, dt, maxfreq, showplot, verbose):
     ind = np.where(freq[0:int(dp/2)] < maxfreq)
     maxfreq_ind = np.max(ind)
     if verbose :
-        print("max frequency = ", maxfreq)
-        print("max frequency index = ", maxfreq_ind)
+        logging.info(f"max frequency = {maxfreq}")
+        logging.info(f"max frequency index ={maxfreq_ind}")
 
     # 最小二乗法の解析式により波高値Aを求める.
     # A = ∫DM*/|N|^2df / ∫|M|^2/|N|^2df
@@ -509,7 +510,7 @@ def optimal_filter_freq(pulse, model, noise, dt, maxfreq, showplot, verbose):
     # 全パルスについて
     for i in range(0, n):
         if i % 1000 == 0 and verbose:
-            print(100.0 * i / n, "%  (", i ,"pulses processed )")
+            logging.info(f"{100.0 * i / n} % pulses processed ")
         
         pls = pulse[i, :]
         X_pls = np.fft.fft(pls)
@@ -553,7 +554,6 @@ def optimal_filter_freq(pulse, model, noise, dt, maxfreq, showplot, verbose):
         plt.xlabel("Pulse height [V]")
         plt.hist(ph_array, bins=256)
         plt.yscale('log')
-        plt.savefig("./hist_optimal-filter_log.png")
         plt.show()
 
     
@@ -566,7 +566,7 @@ def optimal_filter_freq(pulse, model, noise, dt, maxfreq, showplot, verbose):
     hist_data[:, 0] = bins_center
     hist_data[:, 1] = hist
 
-    print("Optimal filtering done.")
+    logging.info("Optimal filtering done.")
     
     return ph_array, hist_data
 
