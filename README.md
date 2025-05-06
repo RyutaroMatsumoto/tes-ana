@@ -1,9 +1,9 @@
 # tes-ana
 analysis codes for tes and related electronics
 
-# Future improvements
+# Implemented Updates
 Hierarchical automated file storage stracture. -> Inrtroduced<br>
-Usage of Julia for faster accurate analysis.
+Faster fft using multi-thread, batch, memory-friendly loading, 5smoothing
+# Future Updates
+Filter variation optimized for TES readout
 
-## data storage
-Create smart manegemant of data, via my 3 macs. as there is no stronge server.
