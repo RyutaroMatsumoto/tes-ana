@@ -70,17 +70,17 @@ def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Paddi
             plt.yscale('log')
             plt.xlabel("Frequency [Hz]")
             plt.ylabel("Mean Spectrum density [V / √Hz]")
-            plt.title(f"Noise Spectrum Analysis - p{p_id}_r{r_id}_C{c_id}")
+            plt.title(f"Spectrum Analysis - p{p_id}_r{r_id}_C{c_id}")
         
             # Save plot to plt_dir
             logging.info("Creating plot")
-            plot_file = plt_dir / f"noise_spectrum_C{c_id}.png"
+            plot_file = plt_dir / f"spectrum_C{c_id}.png"
             plt.savefig(plot_file, dpi=300, bbox_inches='tight')
             logging.info(f"Plot saved to {plot_file}")
             
             # Save data to par_dir
             logging.info("Saving data")
-            data_file = par_dir / f"noise_data_C{c_id}.npz"
+            data_file = par_dir / f"spectrum_data_C{c_id}.npz"
             np.savez(data_file,
                     frequencies=freq,
                     mean_spectrum_density=mean_sdv,
