@@ -15,6 +15,8 @@ The script exposes two layers:
     2. **Dynamic orchestration wrapper** -> 01_trc2npy.py
 
 Author: Ryutaro Matsumoto - 2025-04-09
+Updated: added baseline correction function 2025-05-06 
+
 """
 
 from pathlib import Path
@@ -31,13 +33,18 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01_link"         #tes01 for local directory, tes01_link for SSD directory
+
 # edit here
 period = "01"
-run = "006"
+run = "004"
 REPROCESS_WAVEFORM = True          #True for reprocess, False for skip process for waveforms
 REPROCESS_METADATA = True          #True for reprocess, False for skip process for metadata
+flush = 10                         #Frequency of writing enforcement for RAM clear (set 0 for inside SSD data:tes01)
+threads = 0                        #Threads used for loading (0 is suitable for NVMeSSD or RAM-Disk, if slow, use 2 -> 4)
+dpbl = 1000                        #Data points used for Baseline correction must ends before the signal
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"         #tes01 for local directory, tes01_link for SSD directory
 
 if __name__ == "__main__":
     process_trc2npy(
@@ -46,4 +53,7 @@ if __name__ == "__main__":
         base_dir=BASE_DIR,
         reprocess_waveform=REPROCESS_WAVEFORM,
         reprocess_metadata=REPROCESS_METADATA,
+        flush_interval=flush,
+        max_workers=threads,
+        dpbl = dpbl
     )
