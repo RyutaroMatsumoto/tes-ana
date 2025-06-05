@@ -17,6 +17,11 @@ import accelerate_fft as afft
 from scipy.fft import next_fast_len
 import time
 from pathlib import Path
+from src.fft_funcs import fivesmt_scupyrfft
+import scipy.signal as sig
+from functools import partial
+from math import factorial
+from scipy.optimize import brentq
 # 物理定数
 kB = 1.380E-23   # ボルツマン定数 [J/K]
 
@@ -98,76 +103,163 @@ def responsivity_pow(L0, tau_eff, f, Vb):
 # ==============================================
 
 def pulse_shape(x, x0, a, tau1, tau2):
+    x = np.asarray(x, dtype=float)
 
-    #ind = np.where(x <= x0)
-    #maxphind = np.max(ind)
-    
-    rise  = a * (1.0 - np.exp(-(x - x0)/tau1) )
-    decay = a * np.exp( -(x - x0)/tau2 )
-    #pulse = np.hstack( [rise[:maxphind], decay[maxphind:] ])
-    #return pulse
-    
-    return rise
-    
+    # ===== 立ち上がり =====
+    exp_rise = np.clip(- (x - x0) / tau1, -700,  0)   #  溢れ防止
+    rise     = a * (1.0 - np.exp(exp_rise))**1
+
+    # ===== 立ち下がり =====
+    exp_decay = np.clip(-(x - x0) / tau2, -700, 0)
+    decay     = a * np.exp(exp_decay)
+
+    # ===== piece-wise 合成 =====
+    y = np.where(x <= x0, rise, decay)
+    return y
+    # x = np.asarray(x, float)
+    # y = np.zeros_like(x)
+    # t = x - x0
+    # m = t >= 0
+    # tt = t[m]
+    # # 立ち上がり × 立ち下がり
+    # y[m] = (1.0 - np.exp(-tt / tau1)) * np.exp(-tt / tau2)
+
+    # # ---- 正規化：モデルピークを a に合わせる ----
+    # if tau1 == tau2:
+    #     tp = tau1
+    # else:
+    #     tp = tau1 * tau2 / (tau2 - tau1) * np.log(tau2 / tau1)
+    # gain = (1.0 - np.exp(-tp / tau1)) * np.exp(-tp / tau2)
+    # return a * y / gain        # ← これでピーク値＝a
     '''
     if x <= x0 :
         return a * (1.0 - np.exp(-(x - x0)/tau1) )
     if x > x0 :
         return a * np.exp( -(x - x0)/tau2 )
     '''
+def pulse_shape2(x, x0, a, tau1, tau2):
+    x = np.asarray(x, float)
+    y = np.zeros_like(x)
+    t = x - x0   #Here x0 is pulse start time not highest peak point.
+    m = t >= 0
+    tt = t[m]
+    # 立ち上がり × 立ち下がり
+    if np.any(m):
+        y[m] = a * (1.0 - np.exp(-tt / tau1)) * np.exp(-tt / tau2)
+
+    return y        
+def ps2_init(dt,x_win, xmin,xmax, pulse_smooth, fit_width, p_init:list):
+    # ---- Initial value and boundries ----
+    # 初期値と境界は x0, a, tau1, tau2 のみ
+    p0 = [0,0,0,0]
+    p0[0] = fit_width // 2 - ((p_init[0]-3)*1e-9 // dt)   #立ち上がり開始位置
+    p0[2] = p_init[0]/0.00000005 #係数はインチキ
+    #p0[2] = p_init[0]/np.log(1+p_init[1]/p_init[0])  #立ち上がり時定数初期値
+    p0[3] = p_init[1]/ 2                         #立ち下がり時定数初期値
+    t_max = p0[2] * np.log(1 + p0[3]/p0[2])      #pulse_shape2の最大値を取る点
+    p0[1] = p_init[2] / pulse_shape2(x_win, pulse_smooth[xmin:xmax], 1, p0[2],p0[3])[int(t_max)] #amplitudeの初期値
+    bounds   = ([0, 0, 0, 0], [fit_width, np.inf, fit_width*100000000, fit_width*10])
+    return p0, bounds
+# ==============================================
+# HBT signal shape
+# ==============================================
+def pulse_gamma(t, A, t0, tau_lp, n, B):
+    """
+    CR-(RC)^n     （RCすべて同じ時定数 tau_lp とみなす場合）
+    n は整数固定（例: 3）で curve_fit には渡さない
+    """
+    tt = t - t0
+    y = np.zeros_like(tt)
+    mask = tt >= 0
+    y[mask] = A * (tt[mask]**(n-1) / np.math.factorial(n-1)) \
+              * np.exp(-tt[mask]/tau_lp) / tau_lp**n
+    return y + B
 
 # ==============================================
 # パルス波形にフィット
 # ==============================================
 
-def fit_pulse(pulse, dt, verbose, savefig, dir_output):
-    
+import numpy as np
+from scipy.signal import savgol_filter
+from scipy.optimize import curve_fit
+
+def fit_pulse(pulse, dt, dir_output, dataname, t_scale, fit_width, p_init, verbose, savefig):
     dp = pulse.size
-    
+
+    # Smooth the pulse using a Savitzky-Golay filter
+    window_length = min(11, dp)  # Ensure window_length is odd and less than dp
+    if window_length % 2 == 0:
+        window_length -= 1
+    if window_length > 1:
+        pulse_smooth = savgol_filter(pulse, window_length, 3)
+    else:
+        pulse_smooth = pulse # if dp is too small, skip smoothing
+
     # パルス最大波高位置を求め, 立ち下がり開始位置を探す
-    x0 = np.argmax(pulse)
-    
-    x = np.linspace(0, dp, dp)
-    t = x * dt
-   
+    x0 = np.argmax(pulse_smooth)
+    a0 = np.max(pulse_smooth)
+    print(x0)
+    x = np.arange(dp)
+    t = x * dt / t_scale
+
+    # Limit the fitting_width
+    xmin = max(0, x0 - fit_width // 2)
+    xmax = min(dp, x0 + fit_width // 2)
+    #window化
+    x_win = np.arange(xmin, xmax) - xmin
+    t_win = (x_win + xmin) * dt / t_scale
+
     # フィッティング
-    param, cov = curve_fit(pulse_shape, x, pulse)
-       
-    x0_opt = param[0]   # 最大波高位置
-    a_opt = param[1]    # スケール
-    tau1_opt = param[2] # 立ち上がり時定数1
-    tau2_opt = param[3] # 立ち下がり時定数1
+    try:
+        #Curve fit
+        print(ps2_init(dt,x_win, xmin,xmax, pulse_smooth, fit_width, p_init)[0])
+        p_opt, _ = curve_fit(pulse_shape2, x_win, pulse_smooth[xmin:xmax], 
+                             p0=ps2_init(dt,x_win, xmin,xmax, pulse_smooth, fit_width, p_init)[0],       #pulse_shape2用の初期値設定関数
+                             bounds = ps2_init(dt,x_win, xmin,xmax, pulse_smooth, fit_width, p_init)[1])
+        #Params acquisition
+        x0_opt = p_opt[0]   # 最大波高位置
+        a_opt = p_opt[1]    # スケール
+        tau1_opt = p_opt[2] # 立ち上がり時定数1
+        tau2_opt = p_opt[3] # 立ち下がり時定数2
 
-    if verbose:
-        print("Rise time constant [s] : ", tau1_opt * dt)
-        print("Decay time constant [s] : ", tau2_opt * dt)
+        if verbose:
+            # # 3) t01, t63 を数値解 with error handling まだエラーあり
+            # t01 = brentq(lambda t: pulse_shape2(x_win,*param) - 1e-5*a_opt, x0_opt, 1000)
+            # t63 = brentq(lambda t: pulse_shape2(x_win,*param) - 0.632*a_opt, x0_opt, 1000)
 
+            # rise_10_90 = (t63 - t01) * dt
+            # tau_r = rise_10_90 / 1
+            # print(f"Rise time constant: {tau_r} s")
+            print(f"time constant 1[pt] : {tau1_opt}")
+            print(f"time constant 2[pt] : {tau2_opt}")
+            print(f"Amplitude[a.u] : {a_opt}")
+        if savefig:
 
-    if savefig:
-        
-        ymax = np.max(pulse) * 1.2
-        ymin = -0.005
+            ymax = np.max(pulse) * 1.2
+            ymin = np.min(pulse) * 1.2
 
-        fig = plt.figure(figsize=(9, 6))
-        plt.rcParams['font.size'] = 14
-        plt.rcParams['font.family']= 'sans-serif'
-        plt.rcParams['font.sans-serif'] = ['Arial']
-        
-        plt.plot(t, pulse,  color=[0.0, 1.0, 0.0], marker='.')
-        plt.plot(t, pulse_shape(x, *param), color='red')
-        
-        plt.ylabel("Pulse height [a.u.]")
-        plt.xlabel("Time (x dt) [s]")
+            plt.figure(figsize=(10, 5))
+            plt.rcParams['font.size'] = 14
+            plt.rcParams['font.family']= 'sans-serif'
+            plt.rcParams['font.sans-serif'] = ['Arial']
+            plt.plot(t[xmin:xmax], pulse[xmin:xmax], color=[0.0, 1.0, 0.0], marker='.', label="raw data")
+            plt.plot(t_win, pulse_shape2(x_win,*ps2_init(dt,x_win, xmin,xmax, pulse_smooth, fit_width, p_init)[0]), color='red', label="fitted curve")
 
-        #plt.xticks(x_all, time)
-        #plt.xticks(time)
-        
-        plt.ylim([ymin, ymax])
-        plt.grid()
-        plt.savefig(dir_output + "fit_pulse.png")
-        #plt.show()
+            plt.ylabel(f"Pulse height [V]")
+            plt.xlabel(f"Time [{t_scale}s]")
+            plt.legend()
+            #plt.xticks(x_all, time)
+            #plt.xticks(time)
 
-    return tau1_opt, tau2_opt
+            plt.ylim([ymin, ymax])
+            plt.grid()
+            plt.savefig(dir_output / f"Fitting_{dataname}.png")
+            plt.show()
+            logging.info(f"Saved fitting fig to{dir_output}")
+        return tau1_opt, tau2_opt
+    except Exception as e:
+        print(f"Fitting failed: {e}")
+        return None, None
 
 
 
@@ -527,9 +619,9 @@ def optimal_filter_freq(pulse, model, noise, dt, maxfreq, showplot, verbose):
 
         # フィッティング精度の確認        
         if i % 1000 == 0 :
-            plt.plot(pls)
-            plt.plot(model*A)
-            plt.show()
+            plt.plot(pls)   #pulse
+            plt.plot(model*A) #averaged pulse
+            #plt.show()    #off for ssh connected environment
             
 
     if showplot:
@@ -825,7 +917,7 @@ def spectrum_density(wave, dt, Rf, Mf, Min, showplot, verbose):
         plt.xscale('log')
         plt.yscale('log')
         plt.xlabel("Frequency [$Hz$]")
-        plt.ylabel("Spectrum Density [$A / \sqrt{Hz}$]")
+        plt.ylabel(r"Spectrum Density [$A / \sqrt{Hz}$]")
         #plt.savefig("./SD_A.png")
         plt.show()
 
@@ -961,6 +1053,16 @@ def pulse_integral(pulse, timin, timax, showplot, verbose):
         
         
     return area_array
+
+def highres_psd(input:Path,output:Path, dt, threads, Batch):
+    freq, sd, t = fivesmt_scupyrfft(
+        path = input,
+        dt = dt,
+        threads = threads,
+        Batch = Batch
+    )
+    W = 1.0/ sd
+    np.save(output,W)
 
 
 

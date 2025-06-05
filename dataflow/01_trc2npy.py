@@ -34,16 +34,16 @@ logging.basicConfig(
 )
 
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01_link"         #tes01 for local directory, tes01_link for SSD directory
+BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"         #tes01 for local directory, tes01_link for SSD directory
 
 # edit here
-period = "01"
-run = "004"
+period = "04"
+run = "005"
 REPROCESS_WAVEFORM = True          #True for reprocess, False for skip process for waveforms
 REPROCESS_METADATA = True          #True for reprocess, False for skip process for metadata
 flush = 10                         #Frequency of writing enforcement for RAM clear (set 0 for inside SSD data:tes01)
 threads = 0                        #Threads used for loading (0 is suitable for NVMeSSD or RAM-Disk, if slow, use 2 -> 4)
-dpbl = 1000                        #Data points used for Baseline correction must ends before the signal
+dpbl = 80                        #Data points used for Baseline correction must ends before the signal
 
 
 if __name__ == "__main__":

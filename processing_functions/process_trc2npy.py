@@ -92,7 +92,7 @@ def _write_channel_memmap(files: List[Path], out_dir: Path, flush_interval: int,
             return
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / (files[0].parent.name.split("--")[0] + "--Trace.npy")
+    out_path = out_dir / (files[0].name.split("--")[0] + "--Trace.npy")
 
     # --- Determine dtype & trace length from the first file ---
     first_wave = parse_trc_file_wave(files[0],dpbl)

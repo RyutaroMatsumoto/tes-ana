@@ -30,20 +30,27 @@ logging.basicConfig(
 BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"
 
 # edit here
-period = "03"
-run = "006"
+period = "04"
+run = "005"
 channels = [#"1"
             #,
-             "2"
+            "2"
              #,"4"
-            ]  # Channel number, add "Cn" if needed. For P03, C1=SQUID, C2=HBT, C4= Timing Trigger
-row_index=132
-show_single_wave = True
-show_single_10 =False    #compare trap-on & trap-off for 10 single waves
-show_sample_ave =False      #Either show_single or show_sample_ave should be True!
+            ]              # Channel number, add "Cn" if needed. For P03, C1=SQUID, C2=HBT, C4= Timing Trigger
+row_index=133
+show_single_wave = False
+show_single_10 =False      #compare trap-on & trap-off for 10 single waves
+show_sample_ave =True      #Either show_single or show_sample_ave should be True!
 trap=False
-t_range=[0,2]
+fitting = False
+diff = True       
+
+t_range=[0,50]
 reprocess =True
+
+
+
+
 if __name__ == "__main__":
     # perform noise analysis for each channel
     logging.info(f"Processing wave analysis for C{', '.join(channels)}")
@@ -57,6 +64,8 @@ if __name__ == "__main__":
         show_single_10 =show_single_10,
         show_sample_avg=show_sample_ave,
         trap=trap,
+        fitting = fitting,
+        diff = diff,
         t_range=t_range,
         reprocess=reprocess
     )

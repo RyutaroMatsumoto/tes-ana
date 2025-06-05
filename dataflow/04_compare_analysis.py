@@ -33,18 +33,25 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"
 
 
 # edit here
-period1 = "03"
-run1 = "002"
-channels1 = "1"  # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
+period1 = "05"
+run1 = "001"
+channels1 = "2"             # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
 
-period2 = "03"
-run2 = "004"
-channels2 = "1"  # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
+period2 = "05"
+run2 = "002"
+channels2 = "2"             # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
 
-domain = "freq"    # "time" or "freq" domain, either domain you want to compare
-
+domain = "time"             # "time" or "freq" domain, either domain you want to compare
+fitting = True              #True for fitting only when domain = time.
+fitting_samples = 500       #Sampling points used for fitting around amplitude max point.
+p_init = [11.5, 35, 0.015]  #initial value for fitting. (rise time(0-100%), fall time(0-100%), amplitude) params in ns.
+traces = [
+    #"channels1",
+    #"channels2",
+    "differential"    #choose which trace want to show in the fig
+]
 if __name__ == "__main__":
-    logging.info(f"Processing compare analysis for {period1}/{run1}/{channels1} and {period2}{run2}{channels2}")
+    logging.info(f"Processing compare analysis for p{period1}/r{run1}/C{channels1} and p{period2}/r{run2}/C{channels2}")
     process_compare(
         p_id1=period1,
         r_id1=run1,
@@ -53,5 +60,9 @@ if __name__ == "__main__":
         r_id2=run2,
         c_id2=channels2,
         base_dir=BASE_DIR,
-        domain = domain
+        domain = domain,
+        fitting = fitting,
+        fitting_samples = fitting_samples,
+        p_init = p_init,
+        traces = traces
     )

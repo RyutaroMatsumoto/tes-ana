@@ -41,9 +41,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"
 
 
 # edit here
-period = "03"
-run = "002"
-channels = ["1"]  # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
+period = "05"
+run = "001"
+channels = ["2"]  # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
 
 #analysis Parameters 
 padding_mode: Padding = "5_smt_scupyrfft" # Either of ["5_smt_pyfftw","5_smt_scupyrfft","pwr_2"]
