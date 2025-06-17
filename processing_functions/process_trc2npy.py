@@ -92,7 +92,9 @@ def _write_channel_memmap(files: List[Path], out_dir: Path, flush_interval: int,
             return
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / (files[0].name.split("--")[0] + "--Trace.npy")
+    # Extract channel ID from the first file to create consistent output filename
+    channel_id = files[0].name.split("--")[0]  # e.g., "C1", "C2", etc.
+    out_path = out_dir / (channel_id + "--Trace.npy")
 
     # --- Determine dtype & trace length from the first file ---
     first_wave = parse_trc_file_wave(files[0],dpbl)
@@ -125,7 +127,7 @@ def _write_channel_memmap(files: List[Path], out_dir: Path, flush_interval: int,
         )
 
     # --- Define loader helper for threaded mode ---
-    def _loader(idx_path: Tuple[int, Path],dpbl: int) -> Tuple[int, np.ndarray]:
+    def _loader(idx_path: Tuple[int, Path]) -> Tuple[int, np.ndarray]:
         idx, p = idx_path
         return idx, parse_trc_file_wave(p, dpbl)
 
@@ -163,23 +165,77 @@ def _write_channel_memmap(files: List[Path], out_dir: Path, flush_interval: int,
     LOGGER.info("Finished writing %s (%d traces)", out_path, len(files))    
 
 def process_trc2npy(p_id: str, r_id: str, base_dir: Path, reprocess_waveform:bool , reprocess_metadata: bool, flush_interval: int, max_workers: int, dpbl: int) -> None:
-    raw_dir = base_dir / "generated_data" / "raw_trc" / f"p{p_id}" / f"r{r_id}"
+    # Find all directories matching the pattern r{r_id} and r{r_id}-n
+    raw_base_dir = base_dir / "generated_data" / "raw_trc" / f"p{p_id}"
     out_dir = base_dir / "generated_data" / "raw" / f"p{p_id}" / f"r{r_id}"
     meta_path = base_dir / "teststand_metadata" / "hardware" / "scope" / f"p{p_id}" / f"r{r_id}" / f"lecroy_metadata_p{p_id}_r{r_id}.json"
-    if not raw_dir.is_dir():
-        raise FileNotFoundError(f"Raw directory does not exist: {raw_dir}")
-
-    trc_files = sorted(raw_dir.glob("C*--Trace--*.trc"))
-    if not trc_files:
-        trc_files = sorted(raw_dir.glob("C*--wave--*.trc"))
-    if not trc_files:
-        logging.warning("No .trc files found in %s", raw_dir)
+    
+    # Collect all directories that match the pattern
+    raw_dirs = []
+    
+    # First check the main directory r{r_id}
+    main_raw_dir = raw_base_dir / f"r{r_id}"
+    if main_raw_dir.is_dir():
+        raw_dirs.append(main_raw_dir)
+    
+    # Then check for additional directories r{r_id}-n (n=2,3,4,...)
+    n = 2
+    while True:
+        additional_dir = raw_base_dir / f"r{r_id}-{n}"
+        if additional_dir.is_dir():
+            raw_dirs.append(additional_dir)
+            n += 1
+        else:
+            break
+    
+    if not raw_dirs:
+        raise FileNotFoundError(f"No raw directories found matching pattern r{r_id} or r{r_id}-n in {raw_base_dir}")
+    
+    LOGGER.info("Found %d directories to process: %s", len(raw_dirs), [d.name for d in raw_dirs])
+    
+    # Collect all trc files from all directories with continuous numbering
+    all_trc_files = []
+    for raw_dir in raw_dirs:
+        trc_files = sorted(raw_dir.glob("C*--Trace--*.trc"))
+        if not trc_files:
+            trc_files = sorted(raw_dir.glob("C*--wave--*.trc"))
+        if trc_files:
+            all_trc_files.extend(trc_files)
+    
+    if not all_trc_files:
+        logging.warning("No .trc files found in any of the directories: %s", [str(d) for d in raw_dirs])
         return
     
+    # Group files by channel and renumber them continuously
     channel_files: Dict[str, List[Path]] = {}
-    for f in trc_files:
+    for f in all_trc_files:
         c_id = f.name[1]
         channel_files.setdefault(c_id, []).append(f)
+    
+    # Sort files within each channel and renumber them continuously
+    for c_id in channel_files:
+        # Sort files by directory order and then by original file number
+        def sort_key(file_path):
+            # Extract directory index (0 for main r{r_id}, 1 for r{r_id}-2, etc.)
+            dir_name = file_path.parent.name
+            if dir_name == f"r{r_id}":
+                dir_idx = 0
+            else:
+                # Extract n from r{r_id}-n
+                dir_idx = int(dir_name.split('-')[-1]) - 1
+            
+            # Extract original file number
+            file_parts = file_path.name.split('--')
+            if len(file_parts) >= 3:
+                file_num = int(file_parts[2].split('.')[0])
+            else:
+                file_num = 0
+            
+            return (dir_idx, file_num)
+        
+        channel_files[c_id] = sorted(channel_files[c_id], key=sort_key)
+        LOGGER.info("Channel C%s: %d files collected from %d directories",
+                   c_id, len(channel_files[c_id]), len(raw_dirs))
     
     if reprocess_waveform:
         logging.info("Processing waveforms...")

@@ -33,16 +33,16 @@ logging.basicConfig(
 BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"
 
 # edit here
-#pulse
-period1 = "05"
+period1 = "05"          ##pulse##
 run1 = "001"
-channel1 = "2"  # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
-#noise
-period2 = "05"
+channel1 = "2"          # Channel number  #For after P03,C1 is SQUID and C2 is HBT
+
+period2 = "05"          ##noise##
 run2 = "002"
 channel2 = "2"
-#signal time range (µs) 0.5ns/pt = 0.0005µs/pt
-t_range=[4.5, 5.8]
+
+t_range=[4.5, 5.8]      #signal time range (µs) minimum : 0.5ns/pt = 0.0005µs/pt
+
 
 
 if __name__ == "__main__":

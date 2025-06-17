@@ -88,6 +88,7 @@ def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Paddi
             logging.info(f"Data saved to {data_file}")
             
             # Show plot if in interactive mode
+            plt.show()
             plt.close()  # Close the plot to avoid memory issues
             logging.info("Processing completed successfully")
         else:

@@ -6,6 +6,7 @@ import sys
 import logging
 import os
 import json
+from scipy.signal import iirnotch, filtfilt
 import src.trap_filter as trap_filter
 from src.tes_analysis_tools import fit_pulse,pulse_shape
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -26,7 +27,7 @@ def append_metadata(meta_dict: Dict[str, Any], dest: Path) -> None:
         json.dump(meta_dict, fh, indent=2, ensure_ascii=False)
     logging.info("Metadata written → %s (%d channels)", dest, len(meta_dict))
 
-def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:int=500, show_single_wave=True, show_single_10=False, show_sample_avg=True, trap=False, fitting=False, diff = False, t_range=[0,50], reprocess=True) -> None:
+def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:int, show_single_wave, show_single_10, show_sample_avg, trap, t_range=[0,50], reprocess=True) -> None:
     """
     Process wave data and generate plots.
     
@@ -40,8 +41,6 @@ def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:in
         show_single_10: Whether to show 10 random waveforms
         show_sample_avg: Whether to show sample averaging waveform
         trap: Whether to apply trap filter
-        fitting: Whether to apply pulse fiting to the single/ average waveforms
-        diff: Whether to show differential with the averaged noise waveform
         t_range: Time range in microseconds to display in the plot [start, end]
         reprocess: Whether to reprocess the data
     """
@@ -74,16 +73,16 @@ def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:in
     
     
     if show_single_wave:# Plot waveforms from all processed channels if show_waveform is True
-        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, row_index, sample_avg=False, trap=trap,fitting=fitting, t_range=t_range)
+        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, row_index, sample_avg=False, trap=trap, t_range=t_range)
 
     if show_single_10:#waveのサンプル数をカウントし、その中から10個選んでそれらをtrap前後でプロット
-        show_sample_10(p_id, r_id, c_ids, base_dir, dt, fitting=fitting, t_range=t_range)
+        show_sample_10(p_id, r_id, c_ids, base_dir, dt, t_range=t_range)
     
     if show_sample_avg:# Plot sample averaging waveform if sample_averaging is True
-        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, row_index, sample_avg=True, trap=trap, fitting=fitting, t_range=t_range)
+        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, row_index, sample_avg=True, trap=trap, t_range=t_range)
 
 
-def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, row_index: int, sample_avg=False, trap=False, fitting=False, show_figure=True, rt=1e-8, ft=5e-9, t_range=[0,50]) -> None:
+def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, row_index: int, sample_avg, trap, show_figure=True, rt=1e-8, ft=5e-9, t_range=[0,50]) -> None:
 
     """
     Plot waveforms from multiple channels on the same plot.
@@ -97,6 +96,7 @@ def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, 
         sample_avg: Bool
         trap: True(ON) or False(OFF)
         fitting: pulse fitting and plot (on/off)
+        notch: notch Hz
         rt: Rise time in seconds (default: 1e-8)
         ft: Flat top time in seconds (default: 5e-9)
         t_range: Time range in microseconds to display in the plot [start, end]
@@ -131,15 +131,9 @@ def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, 
                     if not trap:
                         wave_data = data[row_index, :]
                         dataname = f"raw_waveform_p{p_id}_r{r_id}_s{row_index}_C{','.join(c_ids)}"
-                        if fitting:
-                            fit_pulse(wave_data, dt, plt_dir, dataname, verbose=True, savefig=True)
-                            continue
                     if trap:
                         wave_data = trap_filter(data[row_index, :], dt, rt, ft)
                         dataname = f"trap_waveform_p{p_id}_r{r_id}_s{row_index}_C{','.join(c_ids)}_rt{rt:.1e}_ft{ft:.1e}"
-                        if fitting:
-                            fit_pulse(wave_data, dt, plt_dir, dataname, verbose=True, savefig=True)
-                            continue
                 else:
                     logging.warning(f"Row index {row_index} out of bounds for {file_path} with shape {data.shape}")
                     continue
@@ -147,9 +141,6 @@ def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, 
                 if not trap:
                     wave_data = np.mean(data, axis=0)  
                     dataname = f'sample_averaging_raw_waveform_p{p_id}_r{r_id}_C{",".join(c_ids)}'
-                    if fitting:
-                            fit_pulse(wave_data, dt, plt_dir, dataname, verbose=True, savefig=True)
-                            continue
                     logging.info("Saving data")
                     data_file = par_dir / f"mean_wave_C{c_id}.npz"
                     np.savez(data_file,
@@ -158,9 +149,6 @@ def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, 
                 if trap:
                     wave_data = trap_filter(np.mean(data, axis=0), dt, rt, ft) 
                     dataname = f'sample_averaging_trap_waveform_p{p_id}_r{r_id}_C{",".join(c_ids)}_rt{rt:.1e}_ft{ft:.1e}'
-                    if fitting:
-                            fit_pulse(wave_data, dt, plt_dir, dataname, verbose=True, savefig=True)
-                            continue
             # 時間データを生成 (秒単位)
             time_data = np.arange(len(wave_data)) * dt
             

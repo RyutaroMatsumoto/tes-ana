@@ -48,7 +48,7 @@ channels = ["2"]  # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID an
 #analysis Parameters 
 padding_mode: Padding = "5_smt_scupyrfft" # Either of ["5_smt_pyfftw","5_smt_scupyrfft","pwr_2"]
 CPU_THREADS =os.cpu_count()                    # NUM of CPUs used for FFT
-Batch = 16                       # Num of lines which will be batched together
+Batch = 16                        # Num of lines which will be batched together
 Reprocess_noise = True
 
 

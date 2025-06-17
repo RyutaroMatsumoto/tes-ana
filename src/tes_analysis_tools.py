@@ -13,6 +13,7 @@ from scipy.optimize import curve_fit
 import numba
 from numba import jit, objmode
 from numpy.fft import fft, fftfreq
+from scipy.fft import rfft, irfft
 import accelerate_fft as afft
 from scipy.fft import next_fast_len
 import time
@@ -22,6 +23,8 @@ import scipy.signal as sig
 from functools import partial
 from math import factorial
 from scipy.optimize import brentq
+from scipy.signal import welch, periodogram, find_peaks
+
 # 物理定数
 kB = 1.380E-23   # ボルツマン定数 [J/K]
 
@@ -148,7 +151,7 @@ def pulse_shape2(x, x0, a, tau1, tau2):
         y[m] = a * (1.0 - np.exp(-tt / tau1)) * np.exp(-tt / tau2)
 
     return y        
-def ps2_init(dt,x_win, xmin,xmax, pulse_smooth, fit_width, p_init:list):
+def ps2_init(dt,x_win, xmin,xmax, clean, fit_width, p_init:list):
     # ---- Initial value and boundries ----
     # 初期値と境界は x0, a, tau1, tau2 のみ
     p0 = [0,0,0,0]
@@ -157,7 +160,7 @@ def ps2_init(dt,x_win, xmin,xmax, pulse_smooth, fit_width, p_init:list):
     #p0[2] = p_init[0]/np.log(1+p_init[1]/p_init[0])  #立ち上がり時定数初期値
     p0[3] = p_init[1]/ 2                         #立ち下がり時定数初期値
     t_max = p0[2] * np.log(1 + p0[3]/p0[2])      #pulse_shape2の最大値を取る点
-    p0[1] = p_init[2] / pulse_shape2(x_win, pulse_smooth[xmin:xmax], 1, p0[2],p0[3])[int(t_max)] #amplitudeの初期値
+    p0[1] = p_init[2] / pulse_shape2(x_win, clean[xmin:xmax], 1, p0[2],p0[3])[int(t_max)] #amplitudeの初期値
     bounds   = ([0, 0, 0, 0], [fit_width, np.inf, fit_width*100000000, fit_width*10])
     return p0, bounds
 # ==============================================
@@ -183,7 +186,7 @@ import numpy as np
 from scipy.signal import savgol_filter
 from scipy.optimize import curve_fit
 
-def fit_pulse(pulse, dt, dir_output, dataname, t_scale, fit_width, p_init, verbose, savefig):
+def fit_pulse(pulse, dt, dir_output, dataname, fit_width, p_init, verbose, savefig): #-> tau1_opt,tau2_opt
     dp = pulse.size
 
     # Smooth the pulse using a Savitzky-Golay filter
@@ -200,22 +203,109 @@ def fit_pulse(pulse, dt, dir_output, dataname, t_scale, fit_width, p_init, verbo
     a0 = np.max(pulse_smooth)
     print(x0)
     x = np.arange(dp)
-    t = x * dt / t_scale
+    t = x * dt 
+
+    #noise processing
+    idx_noise = np.logical_and(x<x0-30, x>x0-5030)        #pulse前のノイズ参照位置 500ps/ptを想定
+    t_noise = x[idx_noise] * dt
+    y_noise = pulse[idx_noise]
+    ############線形正弦波フィッティング####################
+    # # --- 2) 線形最小二乗で A,B を求める -------------------
+    fs = 2e9        #sampling 周波数
+    #抜きたい周波数リスト
+    f0 = 50e6         #抜きたい周波数
+    S = np.sin(2*np.pi*f0*t_noise)
+    C = np.cos(2*np.pi*f0*t_noise)
+    #行列 [S  C] に対して [A;B] を最小二乗で解く
+    X = np.column_stack((S, C))
+    coeffs, *_ = np.linalg.lstsq(X, y_noise, rcond=None)
+    A, B = coeffs       # A=sin成分係数, B=cos成分係数
+
+    # # --- 3) 正弦波を再合成し 4) 引き算 ---------------------
+    noise_fit = A*np.sin(2*np.pi*f0*t) + B*np.cos(2*np.pi*f0*t)
+    clean = pulse - 2 * noise_fit
+
+    y_noise = clean[idx_noise]
+    f0 = 44.2272e6         #抜きたい周波数
+    S = np.sin(2*np.pi*f0*t_noise)
+    C = np.cos(2*np.pi*f0*t_noise)
+    #行列 [S  C] に対して [A;B] を最小二乗で解く
+    X = np.column_stack((S, C))
+    coeffs, *_ = np.linalg.lstsq(X, y_noise, rcond=None)
+    A, B = coeffs       # A=sin成分係数, B=cos成分係数
+
+    # # --- 3) 正弦波を再合成し 4) 引き算 ---------------------
+    noise_fit2 = A*np.sin(2*np.pi*f0*t) + B*np.cos(2*np.pi*f0*t)
+    clean = clean - noise_fit2
+
+    y_noise = clean[idx_noise]
+    f0 = 44.92e6         #抜きたい周波数
+    S = np.sin(2*np.pi*f0*t_noise)
+    C = np.cos(2*np.pi*f0*t_noise)
+    #行列 [S  C] に対して [A;B] を最小二乗で解く
+    X = np.column_stack((S, C))
+    coeffs, *_ = np.linalg.lstsq(X, y_noise, rcond=None)
+    A, B = coeffs       # A=sin成分係数, B=cos成分係数
+
+    # # --- 3) 正弦波を再合成し 4) 引き算 ---------------------
+    noise_fit3 = A*np.sin(2*np.pi*f0*t) + B*np.cos(2*np.pi*f0*t)
+    clean = clean - noise_fit3
+    
+    f, Pxx = periodogram(y_noise, fs=fs, nfft=2**14)
+    mask = (f>42e6)&(f<51e6)
+    f_cut, P_cut = f[mask], Pxx[mask]
+    peaks, _ = find_peaks(P_cut, height=np.max(P_cut)*0.8)
+    f_peaks = f_cut[peaks]
+    print(f_peaks)
+    # f0_list = [50e6, *f_peaks]
+
+    # # デザイン行列 X を作成：各周波数ごとに sin, cos
+    # # 例: 列が [sin(f1), cos(f1), sin(f2), cos(f2)]
+    # cols = []
+    # for f0 in f0_list:
+    #     cols.append(np.sin(2*np.pi*f0*t_noise))
+    #     cols.append(np.cos(2*np.pi*f0*t_noise))
+    # X = np.column_stack(cols)    # shape=(N_noise, 4)
+
+    # # --- 2) 最小二乗で一括フィット ---
+    # # coeffs = [A1, B1, A2, B2]
+    # coeffs, *_ = np.linalg.lstsq(X, y_noise, rcond=None)
+
+    # # --- 3) 全区間にわたってノイズを再合成 & 引き算 ---
+    # # t 全体は t（秒単位）として既に定義済み
+    # noise_fit = np.zeros_like(t)
+    # for i, f0 in enumerate(f0_list):
+    #     A = coeffs[2*i]
+    #     B = coeffs[2*i+1]
+    # noise_fit += A*np.sin(2*np.pi*f0*t) + B*np.cos(2*np.pi*f0*t)
+
+    # clean = pulse - noise_fit
+
+    ###############Wienerフィルタ##################
+    # fs = 2e9
+    # f, Pn = welch(y_noise, fs=fs, nperseg=4096)
+    # # ---- 2) 信号 PSD (パルス含む) ----
+    # _, Ps = welch(pulse, fs=fs, nperseg=4096)
+    # G = 1 - (Pn / np.maximum(Ps, 1e-30))
+    # Gfull = np.interp(np.fft.rfftfreq(len(pulse), d=1/fs), f, G)
+    # Y = rfft(pulse)
+    # clean = irfft(Y * Gfull, n=len(pulse))
+    ###############Wienerフィルタ##################
 
     # Limit the fitting_width
     xmin = max(0, x0 - fit_width // 2)
     xmax = min(dp, x0 + fit_width // 2)
     #window化
     x_win = np.arange(xmin, xmax) - xmin
-    t_win = (x_win + xmin) * dt / t_scale
+    t_win = (x_win + xmin) * dt
 
     # フィッティング
     try:
         #Curve fit
         print(ps2_init(dt,x_win, xmin,xmax, pulse_smooth, fit_width, p_init)[0])
-        p_opt, _ = curve_fit(pulse_shape2, x_win, pulse_smooth[xmin:xmax], 
-                             p0=ps2_init(dt,x_win, xmin,xmax, pulse_smooth, fit_width, p_init)[0],       #pulse_shape2用の初期値設定関数
-                             bounds = ps2_init(dt,x_win, xmin,xmax, pulse_smooth, fit_width, p_init)[1])
+        p_opt, _ = curve_fit(pulse_shape2, x_win, clean[xmin:xmax], 
+                             p0=ps2_init(dt,x_win, xmin,xmax, clean, fit_width, p_init)[0],       #pulse_shape2用の初期値設定関数
+                             bounds = ps2_init(dt,x_win, xmin,xmax, clean, fit_width, p_init)[1])
         #Params acquisition
         x0_opt = p_opt[0]   # 最大波高位置
         a_opt = p_opt[1]    # スケール
@@ -243,10 +333,14 @@ def fit_pulse(pulse, dt, dir_output, dataname, t_scale, fit_width, p_init, verbo
             plt.rcParams['font.family']= 'sans-serif'
             plt.rcParams['font.sans-serif'] = ['Arial']
             plt.plot(t[xmin:xmax], pulse[xmin:xmax], color=[0.0, 1.0, 0.0], marker='.', label="raw data")
-            plt.plot(t_win, pulse_shape2(x_win,*ps2_init(dt,x_win, xmin,xmax, pulse_smooth, fit_width, p_init)[0]), color='red', label="fitted curve")
+            plt.plot(t[xmin:xmax], clean[xmin:xmax], color="purple", marker='.', label="noise_clean")
+            plt.plot(t[xmin:xmax], noise_fit[xmin:xmax], color="blue", marker='.', label="noise_fit1")
+            plt.plot(t[xmin:xmax], noise_fit2[xmin:xmax], color="lightblue", marker='.', label="noise_fit2")
+            plt.plot(t[xmin:xmax], noise_fit3[xmin:xmax], color="darkblue", marker='.', label="noise_fit3")
+            plt.plot(t_win, pulse_shape2(x_win,*ps2_init(dt,x_win, xmin,xmax, clean, fit_width, p_init)[0]), color='red', label="fitted curve")
 
             plt.ylabel(f"Pulse height [V]")
-            plt.xlabel(f"Time [{t_scale}s]")
+            plt.xlabel(f"Time [s]")
             plt.legend()
             #plt.xticks(x_all, time)
             #plt.xticks(time)
@@ -621,7 +715,7 @@ def optimal_filter_freq(pulse, model, noise, dt, maxfreq, showplot, verbose):
         if i % 1000 == 0 :
             plt.plot(pls)   #pulse
             plt.plot(model*A) #averaged pulse
-            #plt.show()    #off for ssh connected environment
+            plt.show()    #off for ssh connected environment
             
 
     if showplot:

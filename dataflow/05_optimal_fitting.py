@@ -34,13 +34,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"
 
 # edit here
 #pulse
-period1 = "00"
+period1 = "06"
 run1 = "001"
-channel1 = "3"  # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
+channel1 = "1"  # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
 #noise
-period2 = "00"
+period2 = "06"
 run2 = "002"
-channel2 = "3"
+channel2 = "1"
 
 # Common Noise Reduction
 cnr = False
@@ -49,8 +49,8 @@ cnr = False
 Max_freq = 10**7  # #max freqency Use ** for exponentiation in Python, not ^
 phmin = -0.015     #minimum amplitude[V] used for averaging
 phmax = 0.000    #maximum amplitude[V] used for averaging
-timin = 135        #minimum time index[int] used for averaging
-timax = 450        #maximum time index[int] used for averaging make sure this interval contains peak
+timin = 150        #minimum time index[int] used for averaging
+timax = 500        #maximum time index[int] used for averaging make sure this interval contains peak
 normalize = False   #Bool
 
 #Options

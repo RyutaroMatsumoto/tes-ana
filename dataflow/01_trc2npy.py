@@ -37,8 +37,8 @@ logging.basicConfig(
 BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"         #tes01 for local directory, tes01_link for SSD directory
 
 # edit here
-period = "04"
-run = "005"
+period = "06"
+run = "002"
 REPROCESS_WAVEFORM = True          #True for reprocess, False for skip process for waveforms
 REPROCESS_METADATA = True          #True for reprocess, False for skip process for metadata
 flush = 10                         #Frequency of writing enforcement for RAM clear (set 0 for inside SSD data:tes01)

@@ -50,6 +50,13 @@ traces = [
     #"channels2",
     "differential"    #choose which trace want to show in the fig
 ]
+notch = False            #notch 
+notch_range = [         #notch range [Hz, Q-value] Q-value(sharpness of notching) should be <100
+    (50e6,10),
+    (45.5e6,20),
+    (125e6,20),
+    (200e6,10)
+    ]   
 if __name__ == "__main__":
     logging.info(f"Processing compare analysis for p{period1}/r{run1}/C{channels1} and p{period2}/r{run2}/C{channels2}")
     process_compare(
@@ -64,5 +71,7 @@ if __name__ == "__main__":
         fitting = fitting,
         fitting_samples = fitting_samples,
         p_init = p_init,
-        traces = traces
+        traces = traces,
+        notch = notch,
+        notch_range = notch_range
     )

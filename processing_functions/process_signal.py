@@ -28,14 +28,14 @@ def process_signal(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2:
             -Deployed
         Analize signal and noise to detect signal from single waveform
             -Yet to be deployed
-            rough sketch of the program
-            1. PSD(upto 2GHz)
-            2. Pre-white (0-200MHz-> F2R and 200MHz-1GHz-> FFT block)
-            3. Band-path filter(HPF for under 20MHz(1/f), LPF for over 1GHz(reflection block) )
-            4. Matched filter around t_range
-            5. Detection statistic: multiresolution fusion
-            6. Threshold setting: peak-hold histogram
-            7. Estimate SNR improve
+            Pipeline of the signal processing
+            1. PSD analysis(upto 2GHz)
+            2. Band-path filter(HPF for under 20MHz(1/f), LPF for over 1GHz(reflection block) )
+            3. Notch (50MHz)
+            4. Whitening (20MHz-1GHz)
+            5. Matched filter around signal detection
+            6. Draw ROC
+
     Data:
         sampling rate: 2GHz(500ps/pt)
         sample length: 50µs(100k sample)
@@ -118,17 +118,7 @@ def process_signal(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2:
     t2_start_idx = max(0, t2_start_idx)
     t2_end_idx = min(len(t2), t2_end_idx)
     
-    # Cut the original waveforms based on t_range and save them
-    data1_cut_train = data1[1:3001, t1_start_idx:t1_end_idx]
-    data2_cut_train = data2[1:1001, t1_start_idx:t1_end_idx]  #t2_start_idx:t2_end_idx
-    data1_cut_test = data1[3001:5001, t1_start_idx:t1_end_idx]
-    data2_cut_test = data2[1001:2001, t1_start_idx:t1_end_idx]
-    
-    # Save the cut waveforms
-    np.save(par_dir1, data1_cut_train)
-    np.save(par_dir2, data2_cut_train)
-    logging.info(f"Saved cut waveform to {par_dir1}")
-    logging.info(f"Saved cut waveform to {par_dir2}")
+   
     
     # Plot only the t_range portion of the mean waveforms
     fig = plt.figure(figsize=(9, 6))
@@ -139,9 +129,13 @@ def process_signal(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2:
     # Plot only the t_range portion
     t1_cut = t1[t1_start_idx:t1_end_idx]
     mean1_cut = mean1[t1_start_idx:t1_end_idx]
+    data1_cut = data1[t1_start_idx:t1_end_idx, :]
     t2_cut = t2[t2_start_idx:t2_end_idx]
     mean2_cut = mean2[t2_start_idx:t2_end_idx]
-    
+    data2_cut = data1[t1_start_idx:t1_end_idx, :]
+    data2_cut_path = base_dir / "generated_data" / "raw" / f"p{p_id2}" / f"r{r_id2}" / f"C{c_id2}" /f"C{c_id2}--time-cut--Trace.npy"
+    np.save(data2_cut_path, data2_cut)
+
     plt.plot(t1_cut, mean1_cut, color='red', linewidth=0.5, label=dataname1)
     plt.plot(t2_cut, mean2_cut, color='blue', linewidth=0.5, label=dataname2)
 
@@ -161,27 +155,63 @@ def process_signal(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2:
     
     # Show Plot
     logging.info("Creating plot")
-    plt.show()
+    #plt.show()
 
-    #Analysis starts here
-    res = evaluate_roc(data1_cut_train, raw_file2, data1_cut_test, data2_cut_test, dt=dt1, fft_threads=8, fft_batch=10)
-    # Plot
-    plt.figure(figsize=(5, 4))
-    plt.semilogx(res["fpr"], res["tpr"], ".-")
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.title(f"ROC   AUC = {res['auc']:.3f}")
-    plt.grid(True, which="both")
-    plt.tight_layout()
-    
-    plt.savefig(plt_dir, dpi=300)
-    logger.info("ROC saved → %s", plt_dir)
-    plt.show()
 
-    # Quick log
-    for tgt in (1e-1, 1e-2, 1e-3, 1e-4):
-        th = float(np.interp(tgt, res["fpr"][::-1], res["thresholds"][::-1]))
-        tp = float(np.interp(tgt, res["fpr"], res["tpr"]))
-        logger.info("FPR≈%.1e →  TPR=%.3f  (thr=%.3g)", tgt, tp, th)
+    # 目標 AUC
+    auc_target = 1.0
+    # 平均化サイクル：1→5→10→...→50
+    sweep = [1] + list(range(5, 101, 5))
+    auc_list: List[Tuple[int, float]] = []
 
-    
+    for averaging_num in sweep:
+        logging.info(f"--- Averaging num = {averaging_num} ---")
+        try:
+            sig_diff, noi_ave = prepare_averaged_datasets(data1_cut, data2_cut, averaging_num)
+        except ValueError as e:
+            logging.warning(f"Skipping averaging_num={averaging_num}: {e}")
+            continue
+
+        # 50:50 で学習/テスト分割 (signal 側のみ)   #need to be modified based on data
+        n_sig = sig_diff.shape[0]
+        n_train = int(0.5 * n_sig)
+        sig_train = sig_diff[:n_train]
+        sig_test = sig_diff[n_train:]
+        # noise を signal_test と同数だけ使う
+        noi_test = noi_ave[: len(sig_test)]
+
+        # ROC 評価
+        res = evaluate_roc(sig_train, data2_cut_path, sig_test, noi_test, dt=dt1)
+        auc = res["auc"]
+        auc_list.append((averaging_num, auc))
+
+        # 個別 ROC プロットを保存
+        plt.figure(figsize=(5, 4))
+        plt.semilogx(res["fpr"], res["tpr"], ".-")
+        plt.xlabel("False Positive Rate")
+        plt.ylabel("True Positive Rate")
+        plt.title(f"ROC (avg={averaging_num})  AUC={auc:.3f}")
+        plt.grid(True)
+        roc_save = plt_dir / f"roc_avg{averaging_num}.png"
+        plt.savefig(roc_save, dpi=300)
+        plt.close()
+        logging.info(f"Saved ROC → {roc_save}")
+
+        if auc >= auc_target:
+            logging.info(f"AUC target {auc_target} reached at averaging_num={averaging_num}")
+            break
+
+    # AUC vs Averaging_Num のトレンドを保存
+    if auc_list:
+        nums, aucs = zip(*auc_list)
+        plt.figure(figsize=(6, 4))
+        plt.plot(nums, aucs, marker="o")
+        plt.xlabel("Averaging Num")
+        plt.ylabel("AUC")
+        plt.title("AUC vs Averaging Num")
+        plt.grid(True)
+        auc_plot_path = plt_dir / "auc_vs_averaging.png"
+        plt.savefig(auc_plot_path, dpi=300)
+        plt.close()
+        logger.info(f"AUC-vs-averaging プロットを保存 → {auc_plot_path}")
+

@@ -7,6 +7,7 @@ import sys
 import os
 import logging
 import json
+from scipy.signal import iirnotch, filtfilt
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Literal, Dict, List,Any
@@ -19,7 +20,7 @@ logging.basicConfig(
 )
 
 domain= Literal["time", "freq"]
-def process_compare(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2: int, domain:domain,fitting:bool, fitting_samples:int, p_init:List, traces:List[str], base_dir: Path)->None:
+def process_compare(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2: int, domain:domain,fitting:bool, fitting_samples:int, p_init:List, traces:List[str], notch:bool, notch_range: List, base_dir: Path)->None:
     plt_dir = base_dir / "generated_data" / "pyplt" / "compare"
     # Create output directories if they don't exist
     plt_dir.mkdir(parents=True, exist_ok=True)
@@ -110,7 +111,7 @@ def process_compare(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2
         data2 = np.load(raw_file2)
         mean2 = data2.get('mean_wave')
         t2 = np.arange(len(mean2)) * dt2
-        #ovelaid plot in freq domain 
+        #ovelaid plot in time domain 
         fig = plt.figure(figsize=(9, 6))
         plt.rcParams['font.size'] = 14
         plt.rcParams['font.family'] = 'sans-serif'
@@ -124,10 +125,19 @@ def process_compare(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2
             plt.plot(t2, mean2, color='blue', linewidth=0.5, label= dataname2)
             filename_suffix += "_with_" + "2"
         if "differential" in traces:
-            plt.plot(t2, mean1-mean2, color='green', linewidth=0.5, label= dataname1+"-"+dataname2)
-            filename_suffix += "_with_" + "diff"
-
-        # ファイル名を生成 (例: "mean_wave_comparison" + filename_suffix + ".png")
+            if not notch:
+                plt.plot(t2, mean1-mean2, color='green', linewidth=0.5, label= dataname1+"-"+dataname2)
+                filename_suffix += "_with_" + "diff"
+            if notch:
+                logging.info("Processing notch...")
+                notched_diff = mean1 - mean2    #initial value
+                dataname = dataname + "_notch"
+                for f0, Q in notch_range:
+                    b,a = iirnotch(f0, Q, 2.0e9)
+                    notched_diff = filtfilt(b,a, notched_diff)
+                    dataname = dataname + "_" + str(f0) + "Hz"
+                plt.plot(t2, notched_diff, color='green', linewidth=0.5, label= dataname1 + "-" + dataname2 + "-notched")
+                filename_suffix += "_with_" + "diff" + "_notched"
         filename = f"mean_wave_comparison_{dataname}" + "(" + filename_suffix + ")" + ".png"
 
         # ファイルを保存 (plt.savefig() を使用)
@@ -148,7 +158,10 @@ def process_compare(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2
         #Fitting
         if fitting:
             logging.info("Fitting pulse...")
-            fit_pulse(mean1-mean2, dt1, plt_dir, dataname, 1e-6, fitting_samples, p_init, True, True)
+            if not notch:
+                fit_pulse(mean1-mean2, dt1, plt_dir, dataname, fitting_samples, p_init, True, True)
+            if notch:
+                fit_pulse(notched_diff, dt1, plt_dir, dataname, fitting_samples, p_init, True, True)
         
         
 # %%
