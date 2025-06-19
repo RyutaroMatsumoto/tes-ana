@@ -27,13 +27,11 @@ def process_optfit(period1:int,run1:int,channel1:int,period2:int,run2:int,channe
     # create path for pulse and noise
     pulse = np.load(base_dir / "generated_data" / "raw" /f"p{period1}"/ f"r{run1}" / f"C{channel1}" / f"C{channel1}--Trace.npy")    #signal waveform
     noise = np.load(base_dir / "generated_data" / "raw" /f"p{period2}"/ f"r{run2}" / f"C{channel2}" / f"C{channel2}--Trace.npy")    #noise waveform
-    #model = np.load(base_dir / "generated_data" / "pypar" / "wave" / f"p{period1}"/ f"r{run1}"/ f"mean_wave_C{channel1}.npz").get("mean_wave") # average signal waveform 
-    #model(average wave) should be got by 02_t_domain_analysis.py using show_ave = True, before using this code.
-    #metadata_path1 = base_dir / "teststand_metadata" / "hardware" /"scope" / f"p{period1}" / f"r{run1}" / f"lecroy_metadata_p{period1}_r{run1}.json"
+    metadata_path1 = base_dir / "teststand_metadata" / "hardware" /"scope" / f"p{period1}" / f"r{run1}" / f"lecroy_metadata_p{period1}_r{run1}.json"
     #load metadata(time interval)
-    #with open(metadata_path1, 'r') as f:
-    #    metadata1 = json.load(f)
-    #    dt = metadata1[f"C{channel1}--00000"]['time_resolution']['dt']
+    with open(metadata_path1, 'r') as f:
+        metadata1 = json.load(f)
+        dt = metadata1[f"C{channel1}--00000"]['time_resolution']['dt']
     
     plt_dir = base_dir / "generated_data" / "pyplt" /"optimal"/f"p{period1}"/ f"r{run1}" / f"C{channel1}"
     # Create directory if it doesn't exist
@@ -72,7 +70,6 @@ def process_optfit(period1:int,run1:int,channel1:int,period2:int,run2:int,channe
         average = make_average_pulse(pulse, phmin, phmax, timin, timax, normalize, verbose, False)
     
     #Optimal Filter
-    dt = 2e-9
     ph_array, histdata =optimal_filter_freq(pulse, average, noise, dt, maxfreq, False, verbose)
     #save hist data
     np.save(par_dir / f"ph_array_p{period1}_r{run1}.npy", ph_array)

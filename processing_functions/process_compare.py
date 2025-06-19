@@ -8,6 +8,7 @@ import os
 import logging
 import json
 from scipy.signal import iirnotch, filtfilt
+from scipy.signal import iirnotch, filtfilt
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Literal, Dict, List,Any
@@ -20,6 +21,7 @@ logging.basicConfig(
 )
 
 domain= Literal["time", "freq"]
+def process_compare(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2: int, domain:domain,fitting:bool, fitting_samples:int, p_init:List, traces:List[str], notch:bool, notch_range: List, base_dir: Path)->None:
 def process_compare(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2: int, domain:domain,fitting:bool, fitting_samples:int, p_init:List, traces:List[str], notch:bool, notch_range: List, base_dir: Path)->None:
     plt_dir = base_dir / "generated_data" / "pyplt" / "compare"
     # Create output directories if they don't exist
@@ -126,7 +128,7 @@ def process_compare(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2
             filename_suffix += "_with_" + "2"
         if "differential" in traces:
             if not notch:
-                plt.plot(t2, mean1-mean2, color='green', linewidth=0.5, label= dataname1+"-"+dataname2)
+                plt.plot(t2, mean1-mean2/2.5, color='green', linewidth=0.5, label= dataname1+"-"+dataname2)
                 filename_suffix += "_with_" + "diff"
             if notch:
                 logging.info("Processing notch...")
@@ -153,7 +155,7 @@ def process_compare(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2
         plot_file = plt_dir / filename
         plt.savefig(plot_file, dpi=300, bbox_inches='tight')
         logging.info(f"Plot saved to {plot_file}")
-        #plt.show()
+        plt.show()
 
         #Fitting
         if fitting:

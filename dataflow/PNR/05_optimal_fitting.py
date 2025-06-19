@@ -39,18 +39,18 @@ run1 = "001"
 channel1 = "1"  # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
 #noise
 period2 = "06"
-run2 = "002"
+run2 = "001"
 channel2 = "1"
 
 # Common Noise Reduction
 cnr = False
 
 #Opt filter params
-Max_freq = 10**7  # #max freqency Use ** for exponentiation in Python, not ^
-phmin = -0.015     #minimum amplitude[V] used for averaging
-phmax = 0.000    #maximum amplitude[V] used for averaging
-timin = 150        #minimum time index[int] used for averaging
-timax = 500        #maximum time index[int] used for averaging make sure this interval contains peak
+Max_freq = 10**9    #max freqency 
+phmin = -0.050      #Lower range of maximum-amplitude[V] in range of timin-timax used for averaging
+phmax = 0.000       #Higher range of maximum-amplitude[V] in range of timin-timax used for averaging
+timin = 180         #minimum time index[int] used for averaging *make sure this interval contains peak
+timax = 300         #maximum time index[int] used for averaging *make sure this interval contains peak
 normalize = False   #Bool
 
 #Options

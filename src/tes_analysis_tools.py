@@ -14,7 +14,7 @@ import numba
 from numba import jit, objmode
 from numpy.fft import fft, fftfreq
 from scipy.fft import rfft, irfft
-import accelerate_fft as afft
+#import accelerate_fft as afft
 from scipy.fft import next_fast_len
 import time
 from pathlib import Path
@@ -23,6 +23,8 @@ import scipy.signal as sig
 from functools import partial
 from math import factorial
 from scipy.optimize import brentq
+from scipy.signal import welch, periodogram, find_peaks
+
 from scipy.signal import welch, periodogram, find_peaks
 
 # 物理定数
@@ -483,9 +485,9 @@ def make_average_pulse(pulse, phmin, phmax, timin, timax, normalize, verbose, sh
     dp = pulse.shape[1]
     ph = np.zeros(n)
     
-    # 波高値測定
+    # 波高値測定 
     for i in range(0, n):
-        ph[i] = np.max((pulse[i, timin:timax]))
+        ph[i] = np.min((pulse[i, timin:timax])) #For my case, SQUID signal always has negative signal.
 
     pulse_avg = np.zeros(dp)
     cnt = 0

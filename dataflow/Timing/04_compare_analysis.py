@@ -33,16 +33,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"
 
 
 # edit here
-period1 = "05"
-run1 = "001"
+period1 = "06"
+run1 = "005"
 channels1 = "2"             # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
 
-period2 = "05"
-run2 = "002"
+period2 = "06"
+run2 = "006"
 channels2 = "2"             # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
 
 domain = "time"             # "time" or "freq" domain, either domain you want to compare
-fitting = True              #True for fitting only when domain = time.
+fitting = False              #True for fitting only when domain = time.
 fitting_samples = 500       #Sampling points used for fitting around amplitude max point.
 p_init = [11.5, 35, 0.015]  #initial value for fitting. (rise time(0-100%), fall time(0-100%), amplitude) params in ns.
 traces = [
