@@ -81,7 +81,7 @@ def make_integral_pulse(pulse: np.ndarray, dt: float, verbose: bool = False) -> 
     # Using numpy's trapz function which is optimized and handles edge cases
     try:
         # Integrate along the time axis (axis=1) for each pulse
-        integral = np.trapz(pulse, dx=dt, axis=1)
+        integral = np.trapezoid(pulse, dx=dt, axis=1)
         
         if verbose:
             logging.info(f"Integration completed successfully")

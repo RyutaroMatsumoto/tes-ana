@@ -21,7 +21,8 @@ import os
 import logging
 from typing import List
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
 from processing_functions.process_compare import process_compare, domain
 
 logging.basicConfig(
@@ -29,16 +30,16 @@ logging.basicConfig(
     format="[%(asctime)s] %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "tes01"
 
 
 # edit here
 period1 = "06"
-run1 = "005"
+run1 = "009"
 channels1 = "2"             # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
 
 period2 = "06"
-run2 = "006"
+run2 = "005"
 channels2 = "2"             # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
 
 domain = "time"             # "time" or "freq" domain, either domain you want to compare
@@ -60,12 +61,12 @@ notch_range = [         #notch range [Hz, Q-value] Q-value(sharpness of notching
 if __name__ == "__main__":
     logging.info(f"Processing compare analysis for p{period1}/r{run1}/C{channels1} and p{period2}/r{run2}/C{channels2}")
     process_compare(
-        p_id1=period1,
-        r_id1=run1,
-        c_id1=channels1,
-        p_id2=period2,
-        r_id2=run2,
-        c_id2=channels2,
+        p_id1= period1,
+        r_id1= run1,
+        c_id1= channels1,
+        p_id2= period2,
+        r_id2= run2,
+        c_id2= channels2,
         base_dir=BASE_DIR,
         domain = domain,
         fitting = fitting,

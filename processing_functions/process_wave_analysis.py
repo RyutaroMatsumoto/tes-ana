@@ -11,6 +11,9 @@ from src.trap_filter import trap_filter
 from src.tes_analysis_tools import fit_pulse,pulse_shape
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# Enable interactive mode for matplotlib to keep plots persistent
+#plt.ion()
+
 def compute_mean_with_mmap(file_path: Path, chunk_size: Optional[int] = None) -> np.ndarray:
     """
     Memory-efficient computation of mean using memory mapping.
@@ -101,7 +104,7 @@ def append_metadata(meta_dict: Dict[str, Any], dest: Path) -> None:
         json.dump(meta_dict, fh, indent=2, ensure_ascii=False)
     logging.info("Metadata written → %s (%d channels)", dest, len(meta_dict))
 
-def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:int, show_single_wave, show_single_10, show_sample_avg, trap, t_range=[0,50], reprocess=True) -> None:
+
 def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:int, show_single_wave, show_single_10, show_sample_avg, trap, t_range=[0,50], reprocess=True) -> None:
     """
     Process wave data and generate plots.
@@ -128,7 +131,7 @@ def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:in
         raise FileNotFoundError(f"Metadata does not exist: {meta_path}")
     with open(meta_path, 'r') as f:
         metadata = json.load(f)
-    dt = metadata['C1--00000']['time_resolution']['dt']
+    dt = metadata[f"C{c_ids[0]}--00000"]['time_resolution']['dt']
     #output
     plt_dir = base_dir / "generated_data" / "pyplt" /"wave"/ f"p{p_id}" / f"r{r_id}"
     plt_dir.mkdir(parents=True, exist_ok=True)
@@ -151,7 +154,7 @@ def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:in
         plot_waveforms(p_id, r_id, c_ids, base_dir, dt, row_index, sample_avg=False, trap=trap,reprocess = reprocess, t_range=t_range)
 
     if show_single_10:#waveのサンプル数をカウントし、その中から10個選んでそれらをtrap前後でプロット
-        show_sample_10(p_id, r_id, c_ids, base_dir, dt, t_range=t_range)
+        show_sample_10(p_id, r_id, c_ids, base_dir, dt, t_range, reprocess)
     
     if show_sample_avg:# Plot sample averaging waveform if sample_averaging is True
         plot_waveforms(p_id, r_id, c_ids, base_dir, dt, row_index, sample_avg=True, trap=trap,reprocess = reprocess, t_range=t_range)
@@ -311,8 +314,12 @@ def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, 
     logging.info(f"Saved plot to {plt_dir}/{dataname}(t_range: {t_range[0]}-{t_range[1]} μs).png")
     if show_figure:
         plt.show()
+        # plt.draw()
+        # plt.pause(0.1)  # Longer pause to ensure plot is properly displayed and persists
+        # # Keep the plot window alive by preventing garbage collection
+        # plt.gcf().canvas.flush_events()
 
-def show_sample_10(p_id: str, r_id: str, c_ids: list, base_dir: Path,dt:float,t_range:list)->None:
+def show_sample_10(p_id: str, r_id: str, c_ids: list, base_dir: Path,dt:float,t_range:list, reprocess)->None:
      # Get sample count from the first channel
         sample_file_path = base_dir / "generated_data" / "raw" / f"p{p_id}" / f"r{r_id}" / f"C{c_ids[0]}" / f"C{c_ids[0]}--Trace.npy"
         if not sample_file_path.exists():
@@ -329,14 +336,14 @@ def show_sample_10(p_id: str, r_id: str, c_ids: list, base_dir: Path,dt:float,t_
                     
                     # Plot each of the 10 randomly selected waveforms both raw and trap
                     for i, idx in enumerate(indices):
-                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, trap=False, show_figure=False, t_range=t_range)
-                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, trap=True, show_figure=False, t_range=t_range)
+                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, trap=False,reprocess= reprocess, show_figure=False, t_range=t_range)
+                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, trap=True, reprocess= reprocess, show_figure=False, t_range=t_range)
                         logging.info(f"Plotted random waveform {i+1}/10 (sample index: {idx})")
                 else:
                     # If fewer than 10 samples, plot all available
                     for idx in range(total_samples):
-                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, trap=False, show_figure=False, t_range=t_range)
-                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, trap=True, show_figure=False, t_range=t_range)
+                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, trap=False, reprocess=reprocess, show_figure=False, t_range=t_range)
+                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, trap=True, reprocess = reprocess, show_figure=False, t_range=t_range)
                         logging.info(f"Plotted waveform {idx+1}/{total_samples} (sample index: {idx})")
             except Exception as e:
                 logging.error(f"Error processing samples for show_single_10: {e}")

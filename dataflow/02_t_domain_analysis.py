@@ -31,18 +31,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"
 
 # edit here
 period = "06"
-run = "005"
+run = "010"
 channels = ["1",
-            #"2"
+            "2"
              #,"4"
             ]              # Channel number, add "Cn" if needed. For P03, C1=SQUID, C2=HBT, C4= Timing Trigger
 row_index=134
-show_single_wave = True
+show_single_wave = False
 show_single_10 =False      #compare trap-on & trap-off for 10 single waves
-show_sample_ave = False      #Either show_single or show_sample_ave should be True!
+show_sample_ave = True      #Either show_single or show_sample_ave should be True!
 trap=False
-t_range=[0,20]                  #graph display time range in µs
-reprocess = True            #Must be true for the first time, false for just plot
+t_range=[0,10]                  #graph display time range in µs
+reprocess = False            #Must be true for the first time, false for just plot
 
 
 

@@ -38,17 +38,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"         #tes0
 
 # edit here
 period = "06"
-run = "006"
+run = "010"
 channels = [    #Added channels selection function for large-sized data. Only selected channels will be converted.
-    #"1",       #If none, all the channels will be converted.
-    "2"
+    "1",       #If none, all the channels will be converted.
+    #"2"
     #,"4"
 ]
 REPROCESS_WAVEFORM = True         #True for reprocess, False for skip process for waveforms
 REPROCESS_METADATA = True          #True for reprocess, False for skip process for metadata
 flush = 10                         #Frequency of writing enforcement for RAM clear (set 0 for inside SSD data:tes01)
 threads = 12                        #Threads used for loading (0 is suitable for NVMeSSD or RAM-Disk, if slow, use 2 -> 4)  For Xeon 4110, 12
-dpbl = 2000                        #Data points used for Baseline correction must ends before the signal
+dpbl = 80                        #Data points used for Baseline correction must ends before the signal
 
 
 if __name__ == "__main__":
