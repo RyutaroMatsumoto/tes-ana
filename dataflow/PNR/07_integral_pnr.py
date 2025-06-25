@@ -22,8 +22,8 @@ import logging, json
 import numpy as np
 from typing import List
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from processing_functions.process_optfit import process_optfit
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from processing_functions.process_integral import process_integral
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,14 +53,7 @@ if __name__ == "__main__":
         channel1 = channel1,  
         period2 = period2, 
         run2 = run2, 
-        channel2 = channel2,  
-        cnr = cnr,
-        maxfreq = Max_freq, 
-        phmin = phmin,
-        phmax = phmax,
-        timin = timin,
-        timax = timax,
-        normalize = normalize,
+        channel2 = channel2, 
         verbose = Verbose,
         base_dir=BASE_DIR
     )

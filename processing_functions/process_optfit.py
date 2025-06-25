@@ -25,8 +25,11 @@ logging.basicConfig(
 def process_optfit(period1:int,run1:int,channel1:int,period2:int,run2:int,channel2:int, cnr, maxfreq, phmin, phmax, timin, timax, normalize, verbose, base_dir:Path)->None:
     DEBUG = True
     # create path for pulse and noise
-    pulse = np.load(base_dir / "generated_data" / "raw" /f"p{period1}"/ f"r{run1}" / f"C{channel1}" / f"C{channel1}--Trace.npy")    #signal waveform
-    noise = np.load(base_dir / "generated_data" / "raw" /f"p{period2}"/ f"r{run2}" / f"C{channel2}" / f"C{channel2}--Trace.npy")    #noise waveform
+    pulse_full = np.load(base_dir / "generated_data" / "raw" /f"p{period1}"/ f"r{run1}" / f"C{channel1}" / f"C{channel1}--Trace.npy")    #signal waveform
+    noise_full = np.load(base_dir / "generated_data" / "raw" /f"p{period2}"/ f"r{run2}" / f"C{channel2}" / f"C{channel2}--Trace.npy")    #noise waveform
+    # cut large noise after pulse (for p06)
+    pulse = pulse_full[..., :-400]
+    noise = noise_full[..., :-400]
     metadata_path1 = base_dir / "teststand_metadata" / "hardware" /"scope" / f"p{period1}" / f"r{run1}" / f"lecroy_metadata_p{period1}_r{run1}.json"
     #load metadata(time interval)
     with open(metadata_path1, 'r') as f:

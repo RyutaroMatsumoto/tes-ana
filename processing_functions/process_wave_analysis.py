@@ -102,7 +102,6 @@ def append_metadata(meta_dict: Dict[str, Any], dest: Path) -> None:
     logging.info("Metadata written → %s (%d channels)", dest, len(meta_dict))
 
 def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:int, show_single_wave, show_single_10, show_sample_avg, trap, t_range=[0,50], reprocess=True) -> None:
-def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:int, show_single_wave, show_single_10, show_sample_avg, trap, t_range=[0,50], reprocess=True) -> None:
     """
     Process wave data and generate plots.
     

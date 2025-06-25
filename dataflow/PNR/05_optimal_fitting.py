@@ -22,7 +22,7 @@ import logging, json
 import numpy as np
 from typing import List
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from processing_functions.process_optfit import process_optfit
 
 logging.basicConfig(
@@ -30,7 +30,7 @@ logging.basicConfig(
     format="[%(asctime)s] %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "tes01"
 
 # edit here
 #pulse
@@ -39,7 +39,7 @@ run1 = "001"
 channel1 = "1"  # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
 #noise
 period2 = "06"
-run2 = "001"
+run2 = "002"
 channel2 = "1"
 
 # Common Noise Reduction

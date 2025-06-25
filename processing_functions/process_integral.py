@@ -100,8 +100,11 @@ def make_integral_pulse(pulse: np.ndarray, dt: float, verbose: bool = False) -> 
 def process_integral(period1:int,run1:int,channel1:int,period2:int,run2:int,channel2:int, verbose, base_dir:Path)->None:
     DEBUG = True
     # create path for pulse and noise
-    pulse = np.load(base_dir / "generated_data" / "raw" /f"p{period1}"/ f"r{run1}" / f"C{channel1}" / f"C{channel1}--Trace.npy")    #signal waveform
-    noise = np.load(base_dir / "generated_data" / "raw" /f"p{period2}"/ f"r{run2}" / f"C{channel2}" / f"C{channel2}--Trace.npy")    #noise waveform
+    pulse_full = np.load(base_dir / "generated_data" / "raw" /f"p{period1}"/ f"r{run1}" / f"C{channel1}" / f"C{channel1}--Trace.npy")    #signal waveform
+    noise_full = np.load(base_dir / "generated_data" / "raw" /f"p{period2}"/ f"r{run2}" / f"C{channel2}" / f"C{channel2}--Trace.npy")    #noise waveform
+    # cut large noise after pulse (for p06)
+    pulse = pulse_full[..., :-400]
+    noise = noise_full[..., :-400]
     metadata_path1 = base_dir / "teststand_metadata" / "hardware" /"scope" / f"p{period1}" / f"r{run1}" / f"lecroy_metadata_p{period1}_r{run1}.json"
     #load metadata(time interval)
     with open(metadata_path1, 'r') as f:
@@ -118,7 +121,7 @@ def process_integral(period1:int,run1:int,channel1:int,period2:int,run2:int,chan
     
     #integral for each pulse
     integral = make_integral_pulse(pulse, dt, verbose)
-    #plot histgram 
+    #plot histgram
     fig = plt.figure(figsize=(9, 6))
     plt.rcParams['font.size'] = 14
     plt.rcParams['font.family']= 'sans-serif'
@@ -127,8 +130,12 @@ def process_integral(period1:int,run1:int,channel1:int,period2:int,run2:int,chan
     plt.ylabel("Counts")
     plt.xlabel("Energy [a.u]")          #as integral of V should be proportional to deposited energy
     plt.hist(integral, bins=256)
-    plt.plot(gaussian_fit(integral))
-    plt.savefig(f"{plt_dir}/hist_integral_PNR_p{period1}_r{run1}.png")
+    
+    # gaussian_fit creates its own plot, so we need to close the current figure
+    # and use the one created by gaussian_fit
+    plt.close(fig)
+    gaussian_fit_plt = gaussian_fit(integral)
+    gaussian_fit_plt.savefig(f"{plt_dir}/hist_integral_PNR_p{period1}_r{run1}.png")
     logging.info(f"hist_integral_PNR_log.png saved to {plt_dir}")
     #save hist data
     np.save(par_dir / f"integral_p{period1}_r{run1}.npy", integral)
