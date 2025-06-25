@@ -21,7 +21,7 @@ logging.basicConfig(
 )
 
 domain= Literal["time", "freq"]
-def process_compare(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2: int, domain:domain,fitting:bool, fitting_samples:int, p_init:List, traces:List[str], notch:bool, notch_range: List, base_dir: Path)->None:
+
 def process_compare(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2: int, domain:domain,fitting:bool, fitting_samples:int, p_init:List, traces:List[str], notch:bool, notch_range: List, base_dir: Path)->None:
     plt_dir = base_dir / "generated_data" / "pyplt" / "compare"
     # Create output directories if they don't exist
@@ -97,12 +97,12 @@ def process_compare(p_id1:int,r_id1:int, c_id1:int, p_id2: int, r_id2:int, c_id2
         if not raw_file1.exists():
             raw_file1 = base_dir / "generated_data" / "pypar" /"wave"/ f"p{p_id1}" / f"r{r_id1}" / f"C{c_id1}"/f"mean_wave_C{c_id1}.npz"
         if not raw_file1.exists():
-            logging.warning("No .npz files found in %s", raw_file1.parent)
+            logging.warning("No .npz files found in %s. Run 02_t_domain_analysis w/ averaging to create this npz", raw_file1.parent)
         
         if not raw_file2.exists():
             raw_file2 = base_dir / "generated_data" / "pypar" /"wave"/ f"p{p_id2}" / f"r{r_id2}" / f"C{c_id2}"/f"mean_wave_C{c_id2}.npz"
         if not raw_file2.exists():
-            logging.warning("No .npz files found in %s", raw_file2.parent)
+            logging.warning("No .npz files found in %s. Run 02_t_domain_analysis w/ averaging to create this npz", raw_file2.parent)
         logging.info(f"Input paths: raw_dir={raw_file1} and {raw_file2}")
 
         #load

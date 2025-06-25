@@ -131,7 +131,6 @@ def _write_channel_memmap(files: List[Path], out_dir: Path, flush_interval: int,
 
     # --- Define loader helper for threaded mode ---
     def _loader(idx_path: Tuple[int, Path]) -> Tuple[int, np.ndarray]:
-    def _loader(idx_path: Tuple[int, Path]) -> Tuple[int, np.ndarray]:
         idx, p = idx_path
         return idx, parse_trc_file_wave(p, dpbl)
 
