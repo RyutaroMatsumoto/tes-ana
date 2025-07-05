@@ -8,7 +8,7 @@ import os
 import json
 from scipy.signal import iirnotch, filtfilt
 from src.trap_filter import trap_filter
-from src.tes_analysis_tools import fit_pulse,pulse_shape
+from src.tes_analysis_tools import fit_pulse,pulse_shape, rc_int
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Enable interactive mode for matplotlib to keep plots persistent
@@ -104,8 +104,7 @@ def append_metadata(meta_dict: Dict[str, Any], dest: Path) -> None:
         json.dump(meta_dict, fh, indent=2, ensure_ascii=False)
     logging.info("Metadata written → %s (%d channels)", dest, len(meta_dict))
 
-def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:int, show_single_wave, show_single_10, show_sample_avg, trap, t_range=[0,50], reprocess=True) -> None:
-def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:int, show_single_wave, show_single_10, show_sample_avg, trap, t_range=[0,50], reprocess=True) -> None:
+def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:int, show_single_wave, show_single_10, show_sample_avg, rc = None, t_range=[0,50], reprocess=True) -> None:
     """
     Process wave data and generate plots.
     
@@ -118,7 +117,7 @@ def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:in
         show_single_wave: Whether to show single waveform
         show_single_10: Whether to show 10 random waveforms
         show_sample_avg: Whether to show sample averaging waveform
-        trap: Whether to apply trap filter
+        rc: Whether to apply rc integral filter for low pass
         t_range: Time range in microseconds to display in the plot [start, end]
         reprocess: Whether to reprocess the data
     """
@@ -151,16 +150,16 @@ def process_wave(p_id: str, r_id: str, c_ids: list, base_dir: Path, row_index:in
     
     
     if show_single_wave:# Plot waveforms from all processed channels if show_waveform is True
-        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, row_index, sample_avg=False, trap=trap,reprocess = reprocess, t_range=t_range)
+        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, row_index, sample_avg=False, rc = rc,reprocess = reprocess, t_range=t_range)
 
-    if show_single_10:#waveのサンプル数をカウントし、その中から10個選んでそれらをtrap前後でプロット
-        show_sample_10(p_id, r_id, c_ids, base_dir, dt, t_range, reprocess)
+    if show_single_10:#waveのサンプル数をカウントし、その中から10個選んでplot
+        show_sample_10(p_id, r_id, c_ids, base_dir, dt, rc, t_range, reprocess)
     
     if show_sample_avg:# Plot sample averaging waveform if sample_averaging is True
-        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, row_index, sample_avg=True, trap=trap,reprocess = reprocess, t_range=t_range)
+        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, row_index, sample_avg=True, rc = rc,reprocess = reprocess, t_range=t_range)
 
 
-def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, row_index: int, sample_avg, trap, reprocess, show_figure=True, rt=1e-8, ft=5e-9, t_range=[0,50]) -> None:
+def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, row_index: int, sample_avg, rc = None, reprocess = True, show_figure=True, rt=1e-8, ft=5e-9, t_range=[0,50]) -> None:
 
     """
     Plot waveforms from multiple channels on the same plot.
@@ -172,7 +171,7 @@ def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, 
         base_dir: Base directory
         row_index: Index of the row to plot (default: 55)
         sample_avg: Bool
-        trap: True(ON) or False(OFF)
+        rc: Value(ON, tau = dt/rc) or None(OFF)
         fitting: pulse fitting and plot (on/off)
         notch: notch Hz
         rt: Rise time in seconds (default: 1e-8)
@@ -206,17 +205,51 @@ def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, 
                 if sample_avg==False:
                     # 指定された行を抽出
                     if row_index < data.shape[0]:
-                        if not trap:
+                        if rc is None:
                             wave_data = data[row_index, :]
                             dataname = f"raw_waveform_p{p_id}_r{r_id}_s{row_index}_C{','.join(c_ids)}"
-                        if trap:
-                            wave_data = trap_filter(data[row_index, :], dt, rt, ft)
-                            dataname = f"trap_waveform_p{p_id}_r{r_id}_s{row_index}_C{','.join(c_ids)}_rt{rt:.1e}_ft{ft:.1e}"
+
+                            #hardcoding notch for exp
+                            logging.info("Processing notch...")
+                            dataname = dataname + "_notch"
+                            notch_range = [         #notch range [Hz, Q-value] Q-value(sharpness of notching) should be <100
+                            (8.6e5,40),
+                            (1.215e6,40),
+                            (1.561e6,40),
+                            (1.904e6,40),
+                            
+                            ]  
+                            for f0, Q in notch_range:
+                                b,a = iirnotch(f0, Q, 2.0e8) # third attribute is dt
+                                wave_data = filtfilt(b,a, wave_data)
+                                dataname = dataname + "_" + str(f0) + "Hz"
+                                #filename_suffix += "_with_" + "diff" + "_notched"
+                        else:
+                            # Debug logging for RC filter
+                            cutoff_freq = 1/(2*np.pi*rc)
+                            logging.info(f"=== RC FILTER DEBUG ===")
+                            logging.info(f"RC value: {rc}")
+                            logging.info(f"dt value: {dt}")
+                            logging.info(f"Calculated cutoff frequency: {cutoff_freq:.2f} Hz")
+                            
+                            input_data = data[row_index, :]
+                            logging.info(f"Input data - shape: {input_data.shape}, min: {np.min(input_data):.6f}, max: {np.max(input_data):.6f}, std: {np.std(input_data):.6f}")
+                            
+                            wave_data = rc_int(input_data, dt, rc)
+                            
+                            logging.info(f"Output data - shape: {wave_data.shape}, min: {np.min(wave_data):.6f}, max: {np.max(wave_data):.6f}, std: {np.std(wave_data):.6f}")
+                            
+                            # Check if data actually changed
+                            data_diff = np.sum(np.abs(wave_data - input_data))
+                            logging.info(f"Total absolute difference between input and output: {data_diff:.6f}")
+                            logging.info(f"=== END RC FILTER DEBUG ===")
+                            
+                            dataname = f"rc_int_waveform_p{p_id}_r{r_id}_s{row_index}_C{','.join(c_ids)}__LP{1/(2*3.14*rc)}Hz"
                     else:
                         logging.warning(f"Row index {row_index} out of bounds for {file_path} with shape {data.shape}")
                         continue
                 if sample_avg==True:
-                    if not trap:
+                    if rc is None:
                         # Use memory-efficient mean computation with mmap #Best chank size for 400,000 data is around 250 
                         wave_data = compute_mean_with_mmap(file_path, 250)
                         dataname = f'sample_averaging_waveform_p{p_id}_r{r_id}_C{",".join(c_ids)}'
@@ -225,11 +258,11 @@ def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, 
                         np.savez(data_file,
                             mean_wave = wave_data)
                         logging.info(f"Data saved to {data_file}")
-                    if trap:
-                        # Use memory-efficient mean computation with mmap, then apply trap filter
+                    else:
+                        # Use memory-efficient mean computation with mmap, then apply rc filter
                         mean_wave = compute_mean_with_mmap(file_path)
-                        wave_data = trap_filter(mean_wave, dt, rt, ft)
-                        dataname = f'sample_averaging_trap_waveform_p{p_id}_r{r_id}_C{",".join(c_ids)}_rt{rt:.1e}_ft{ft:.1e}'
+                        wave_data = rc_int(mean_wave, dt, rc)
+                        dataname = f'sample_averaging_rc_int_waveform_p{p_id}_r{r_id}_C{",".join(c_ids)}__LP{1/(2*3.14*rc)}Hz'
                 # 時間データを生成 (秒単位)
                 time_data = np.arange(len(wave_data)) * dt
                 
@@ -259,24 +292,24 @@ def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, 
                 if sample_avg==False:
                     # 指定された行を抽出
                     if row_index < data.shape[0]:
-                        if not trap:
+                        if rc is None:
                             wave_data = data[row_index, :]
                             dataname = f"raw_waveform_p{p_id}_r{r_id}_s{row_index}_C{','.join(c_ids)}"
-                        if trap:
-                            wave_data = trap_filter(data[row_index, :], dt, rt, ft)
-                            dataname = f"trap_waveform_p{p_id}_r{r_id}_s{row_index}_C{','.join(c_ids)}_rt{rt:.1e}_ft{ft:.1e}"
+                        else:
+                            wave_data = rc_int(data[row_index, :], dt, rc)
+                            dataname = f"rc_int_waveform_p{p_id}_r{r_id}_s{row_index}_C{','.join(c_ids)}_LP{1/(2*3.14*rc)}Hz"
                     else:
                         logging.warning(f"Row index {row_index} out of bounds for {file_path} with shape {data.shape}")
                         continue
                 if sample_avg==True:
-                    if not trap:
+                    if rc is None:
                         dataname = f'sample_averaging_waveform_p{p_id}_r{r_id}_C{",".join(c_ids)}'
                         data_file = par_dir / f"mean_wave_C{c_id}.npz"
                         data = np.load(data_file)
                         wave_data = data['mean_wave']
                         logging.info(f"Data loaded from {data_file}")
-                    if trap:
-                        dataname = f'sample_averaging_trap_waveform_p{p_id}_r{r_id}_C{",".join(c_ids)}_rt{rt:.1e}_ft{ft:.1e}'
+                    else:
+                        dataname = f'sample_averaging_rc_int_waveform_p{p_id}_r{r_id}_C{",".join(c_ids)}__LP{1/(2*3.14*rc)}Hz'
                 # 時間データを生成 (秒単位)
                 time_data = np.arange(len(wave_data)) * dt
                 
@@ -319,7 +352,7 @@ def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, 
         # # Keep the plot window alive by preventing garbage collection
         # plt.gcf().canvas.flush_events()
 
-def show_sample_10(p_id: str, r_id: str, c_ids: list, base_dir: Path,dt:float,t_range:list, reprocess)->None:
+def show_sample_10(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, rc, t_range, reprocess)->None:
      # Get sample count from the first channel
         sample_file_path = base_dir / "generated_data" / "raw" / f"p{p_id}" / f"r{r_id}" / f"C{c_ids[0]}" / f"C{c_ids[0]}--Trace.npy"
         if not sample_file_path.exists():
@@ -334,16 +367,16 @@ def show_sample_10(p_id: str, r_id: str, c_ids: list, base_dir: Path,dt:float,t_
                     # Generate 10 random indices within the range of total_samples
                     indices = np.random.choice(total_samples, 10, replace=False)
                     
-                    # Plot each of the 10 randomly selected waveforms both raw and trap
+                    # Plot each of the 10 randomly selected waveforms both raw and rc
                     for i, idx in enumerate(indices):
-                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, trap=False,reprocess= reprocess, show_figure=False, t_range=t_range)
-                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, trap=True, reprocess= reprocess, show_figure=False, t_range=t_range)
+                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, rc = rc,reprocess= reprocess, show_figure=False, t_range=t_range)
+                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, rc = rc, reprocess= reprocess, show_figure=False, t_range=t_range)
                         logging.info(f"Plotted random waveform {i+1}/10 (sample index: {idx})")
                 else:
                     # If fewer than 10 samples, plot all available
                     for idx in range(total_samples):
-                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, trap=False, reprocess=reprocess, show_figure=False, t_range=t_range)
-                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, trap=True, reprocess = reprocess, show_figure=False, t_range=t_range)
+                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, rc = rc, reprocess=reprocess, show_figure=False, t_range=t_range)
+                        plot_waveforms(p_id, r_id, c_ids, base_dir, dt, idx, sample_avg=False, rc = rc, reprocess = reprocess, show_figure=False, t_range=t_range)
                         logging.info(f"Plotted waveform {idx+1}/{total_samples} (sample index: {idx})")
             except Exception as e:
                 logging.error(f"Error processing samples for show_single_10: {e}")

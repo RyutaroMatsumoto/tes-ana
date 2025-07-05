@@ -6,10 +6,11 @@ import os
 import logging
 import json
 import multiprocessing
+from scipy.signal import iirnotch, filtfilt
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Literal, Dict, List,Any
-import accelerate_fft as afft
+#import accelerate_fft as afft
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src import fft_funcs
 
@@ -23,12 +24,12 @@ logging.basicConfig(
 Mode = Literal["quick", "full"]
 Padding = Literal["5_smt_pyfftw","5_smt_scupyrfft","pwr_2"]
 
-def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Padding, threads:int, Batch:int, reprocess=True) -> None:
+def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Padding, threads:int, Batch:int, notch:bool, reprocess=True) -> None:
     logging.info(f"Starting noise processing for p{p_id}_r{r_id}_C{c_id} with padding: {Padding}")
     try:
         #input
         raw_dir = base_dir / "generated_data" / "raw" / f"p{p_id}" / f"r{r_id}" / f"C{c_id}"
-        raw_file = base_dir / "generated_data" / "raw" / f"p{p_id}" / f"r{r_id}" / f"C{c_id}" / f"C{c_id}--Trace.npy"
+        raw_file_path = base_dir / "generated_data" / "raw" / f"p{p_id}" / f"r{r_id}" / f"C{c_id}" / f"C{c_id}--Trace.npy"
         metadata_path = base_dir / "teststand_metadata" / "hardware" /"scope" / f"p{p_id}" / f"r{r_id}" / f"lecroy_metadata_p{p_id}_r{r_id}.json"
         metadata_time_path = base_dir / "teststand_metadata" / "par" /"fft" / f"p{p_id}" / f"r{r_id}" / f"fft_metadata_p{p_id}_r{r_id}.json"
         logging.info(f"Input paths: raw_dir={raw_dir}, metadata_path={metadata_path}")
@@ -45,14 +46,46 @@ def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Paddi
         with open(metadata_path, 'r') as f:
             metadata = json.load(f)
         dt = metadata['C1--00000']['time_resolution']['dt']
+        
+
+        #notch
+        type_ = "raw"
+        processing_file_path = raw_file_path  # Default to original file
+        
+        #hardcoding notch for exp
+        if notch:
+            logging.info("Processing notch...")
+            # Load data for notch filtering
+            raw_data = np.load(raw_file_path)
+            logging.info(f"Loaded raw data with shape: {raw_data.shape}")
+            
+            notch_range = [         #notch range [Hz, Q-value] Q-value(sharpness of notching) should be <100
+            (8.6e5,40),
+            (1.215e6,40),
+            (1.561e6,40),
+            (1.904e6,40),
+            ]
+            
+            # Apply notch filters
+            for f0, Q in notch_range:
+                b,a = iirnotch(f0, Q, 2.0e8) # third attribute is dt
+                raw_data = filtfilt(b, a, raw_data, axis=1)  # Apply along time axis
+                type_ = "notch"
+            
+            # Save notch-filtered data to temporary file
+            notch_file_path = raw_dir / f"C{c_id}--Trace_notch.npy"
+            np.save(notch_file_path, raw_data)
+            processing_file_path = notch_file_path
+            logging.info(f"Notch-filtered data saved to: {notch_file_path}")
+            
         #FFT process
         logging.info(f"Running analysis mode: {padding}")
         if padding == "5_smt_pyfftw": #5 smothing
-            freq, sdv, time = fft_funcs.fivesmt_pyfftw(raw_file, dt, threads,Batch)
+            freq, sdv, time = fft_funcs.fivesmt_pyfftw(processing_file_path, dt, threads,Batch)
         if padding == "5_smt_scupyrfft": #5 smothing
-            freq, sdv, time = fft_funcs.fivesmt_scupyrfft(raw_file, dt, threads, Batch)
+            freq, sdv, time = fft_funcs.fivesmt_scupyrfft(processing_file_path, dt, threads, Batch)
         elif padding == "pwr_2": #afft
-            freq, sdv, time = fft_funcs.pwrtwo_fft(raw_file, dt, threads, Batch)
+            freq, sdv, time = fft_funcs.pwrtwo_fft(processing_file_path, dt, threads, Batch)
         else:
             logging.error(f"Invalid mode: {padding}. Please use '5_smt_pyfftw', '5_smt_scupyfft' or 'pwr_2'.")
 
@@ -70,7 +103,7 @@ def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Paddi
             plt.yscale('log')
             plt.xlabel("Frequency [Hz]")
             plt.ylabel("Mean Spectrum density [V / √Hz]")
-            plt.title(f"Spectrum Analysis - p{p_id}_r{r_id}_C{c_id}")
+            plt.title(f"Spectrum Analysis-{type_}-p{p_id}_r{r_id}_C{c_id}")
         
             # Save plot to plt_dir
             logging.info("Creating plot")

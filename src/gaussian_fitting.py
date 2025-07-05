@@ -4,7 +4,7 @@ from scipy.optimize import curve_fit
 import matplotlib.cm as cm
 import logging
 
-def gaussian_fit(data, num_gauss=5):
+def gaussian_fit(data, num_gauss=4):
     import numpy as np
     import matplotlib.pyplot as plt
     from scipy.optimize import curve_fit
@@ -12,12 +12,14 @@ def gaussian_fit(data, num_gauss=5):
 
     def multi_gaussian(x, *params):
         y = np.zeros_like(x)
-        for i in range(0, len(params), 3):
+        # Last parameter is the shared width for all Gaussians
+        shared_wid = params[-1]
+        # First parameters are amplitude and center pairs for each Gaussian
+        for i in range(0, len(params) - 1, 2):
             amp = params[i]
             cen = params[i + 1]
-            wid = params[i + 2]
             # Add small epsilon to avoid division by zero
-            y += amp * np.exp(-((x - cen) ** 2) / (2 * (wid ** 2 + 1e-10)))
+            y += amp * np.exp(-((x - cen) ** 2) / (2 * (shared_wid ** 2 + 1e-10)))
         return y
 
     # ヒストグラム
@@ -62,12 +64,12 @@ def gaussian_fit(data, num_gauss=5):
         p0.append(center_init)
         bounds_lower.append(np.min(data) - data_range)  # Allow some extrapolation
         bounds_upper.append(np.max(data) + data_range)
-        
-        # Width: start with reasonable fraction of data std
-        width_init = np.maximum(data_std / (num_gauss + 1), data_range / 100)
-        p0.append(width_init)
-        bounds_lower.append(data_range / 1000)  # Minimum width
-        bounds_upper.append(data_range)  # Maximum width
+    
+    # Add shared width parameter at the end
+    width_init = np.maximum(data_std / (num_gauss + 1), data_range / 100)
+    p0.append(width_init)
+    bounds_lower.append(data_range / 1000)  # Minimum width
+    bounds_upper.append(data_range)  # Maximum width
     
     bounds = (bounds_lower, bounds_upper)
 
@@ -106,11 +108,12 @@ def gaussian_fit(data, num_gauss=5):
             p0_simple.append(center_init)
             bounds_lower_simple.append(np.min(data) - data_range)
             bounds_upper_simple.append(np.max(data) + data_range)
-            
-            width_init = np.maximum(data_std / (simplified_num_gauss + 1), data_range / 100)
-            p0_simple.append(width_init)
-            bounds_lower_simple.append(data_range / 1000)
-            bounds_upper_simple.append(data_range)
+        
+        # Add shared width parameter at the end
+        width_init = np.maximum(data_std / (simplified_num_gauss + 1), data_range / 100)
+        p0_simple.append(width_init)
+        bounds_lower_simple.append(data_range / 1000)
+        bounds_upper_simple.append(data_range)
         
         bounds_simple = (bounds_lower_simple, bounds_upper_simple)
         
@@ -144,11 +147,11 @@ def gaussian_fit(data, num_gauss=5):
 
     # 各成分
     colors = plt.cm.get_cmap('viridis')(np.linspace(0, 1, num_gauss))
+    shared_wid = popt[-1]  # Shared width is the last parameter
     for i in range(num_gauss):
-        amp = popt[3 * i]
-        cen = popt[3 * i + 1]
-        wid = popt[3 * i + 2]
-        y = amp * np.exp(-((x_fit - cen) ** 2) / (2 * wid ** 2))
+        amp = popt[2 * i]      # Amplitude
+        cen = popt[2 * i + 1]  # Center
+        y = amp * np.exp(-((x_fit - cen) ** 2) / (2 * shared_wid ** 2))
         ax.plot(x_fit, y, linestyle='--', color=colors[i], label=f"n = {i}")
 
     ax.set_xlabel("Pulse height [a.u]")

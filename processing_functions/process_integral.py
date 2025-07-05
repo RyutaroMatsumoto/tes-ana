@@ -81,7 +81,7 @@ def make_integral_pulse(pulse: np.ndarray, dt: float, verbose: bool = False) -> 
     # Using numpy's trapz function which is optimized and handles edge cases
     try:
         # Integrate along the time axis (axis=1) for each pulse
-        integral = np.trapezoid(pulse, dx=dt, axis=1)
+        integral = -np.trapz(pulse, dx=dt, axis=1)
         
         if verbose:
             logging.info(f"Integration completed successfully")
@@ -102,9 +102,12 @@ def process_integral(period1:int,run1:int,channel1:int,period2:int,run2:int,chan
     # create path for pulse and noise
     pulse_full = np.load(base_dir / "generated_data" / "raw" /f"p{period1}"/ f"r{run1}" / f"C{channel1}" / f"C{channel1}--Trace.npy")    #signal waveform
     noise_full = np.load(base_dir / "generated_data" / "raw" /f"p{period2}"/ f"r{run2}" / f"C{channel2}" / f"C{channel2}--Trace.npy")    #noise waveform
-    # cut large noise after pulse (for p06)
-    pulse = pulse_full[..., :-400]
-    noise = noise_full[..., :-400]
+    # # cut large noise after pulse (for p06)
+    # pulse = pulse_full[..., :-400]
+    # noise = noise_full[..., :-400]
+
+    pulse = pulse_full
+    noise = noise_full
     metadata_path1 = base_dir / "teststand_metadata" / "hardware" /"scope" / f"p{period1}" / f"r{run1}" / f"lecroy_metadata_p{period1}_r{run1}.json"
     #load metadata(time interval)
     with open(metadata_path1, 'r') as f:

@@ -10,8 +10,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 from scipy.optimize import curve_fit
-import numba
-from numba import jit, objmode
+#import numba
+#from numba import jit, objmode
 #import accelerate_fft as afft
 import pyfftw
 from scipy.fft import next_fast_len,rfft,rfftfreq

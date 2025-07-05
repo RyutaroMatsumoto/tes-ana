@@ -34,12 +34,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "tes01"
 
 # edit here
 #pulse
-period1 = "06"
-run1 = "001"
+period1 = "07"
+run1 = "006"
 channel1 = "1"  # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
 #noise
-period2 = "06"
-run2 = "002"
+period2 = "07"
+run2 = "005"
 channel2 = "1"
 
 #Options

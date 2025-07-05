@@ -8,7 +8,6 @@ import os
 import logging
 import json
 from scipy.signal import iirnotch, filtfilt
-from scipy.signal import iirnotch, filtfilt
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Literal, Dict, List,Any

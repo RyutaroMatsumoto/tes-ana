@@ -37,12 +37,12 @@ logging.basicConfig(
 BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"         #tes01 for local directory, tes01_link for SSD directory
 
 # edit here
-period = "06"
-run = "010"
+period = "07"
+run = "009"
 channels = [    #Added channels selection function for large-sized data. Only selected channels will be converted.
     "1",       #If none, all the channels will be converted.
-    #"2"
-    #,"4"
+    "2"
+    ,"4"
 ]
 REPROCESS_WAVEFORM = True         #True for reprocess, False for skip process for waveforms
 REPROCESS_METADATA = True          #True for reprocess, False for skip process for metadata

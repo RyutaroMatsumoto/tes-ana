@@ -41,13 +41,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"
 
 
 # edit here
-period = "05"
-run = "001"
-channels = ["2"]  # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
+period = "07"
+run = "006"
+channels = ["1"]  # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
+
+#notch
+notch = True  # Freqs are hardcoded for now.
 
 #analysis Parameters 
 padding_mode: Padding = "5_smt_scupyrfft" # Either of ["5_smt_pyfftw","5_smt_scupyrfft","pwr_2"]
-CPU_THREADS =os.cpu_count()                    # NUM of CPUs used for FFT
+CPU_THREADS = os.cpu_count() or 1              # NUM of CPUs used for FFT, default to 1 if None
 Batch = 16                        # Num of lines which will be batched together
 Reprocess_noise = True
 
@@ -63,6 +66,7 @@ if __name__ == "__main__":
             padding=padding_mode,
             threads=CPU_THREADS,
             Batch=Batch,
+            notch = notch,
             reprocess=Reprocess_noise
         )
 

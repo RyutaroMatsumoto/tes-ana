@@ -10,8 +10,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math, json, logging
 from scipy.optimize import curve_fit
-import numba
-from numba import jit, objmode
+#import numba
+#from numba import jit, objmode
 from numpy.fft import fft, fftfreq
 from scipy.fft import rfft, irfft
 #import accelerate_fft as afft
@@ -606,7 +606,7 @@ def shaping_ph_spectrum(pulse, timin, timax, dt, cr, rc, showplot, verbose):
 
         pls = cr_diff(pulse[i, :], cr, dt)
         pls = rc_int(pls, rc, dt)
-        ph_array[i] = np.max( pls[timin:timax] )
+        ph_array[i] = np.min( pls[timin:timax] )  #For now, the pulse is downward
         
         if showplot and i % 1000 == 0:
             plt.plot(pls)
@@ -893,45 +893,45 @@ def calculate_spectrum_density_no_numba(x, dt):
 # wave[dp] : 1波形データ. データ点数は偶数とすること (例 1024点).
 # dt       : サンプリング時間 (sec)
 
-# Optimized core calculation function with Numba JIT compilation
-@numba.jit(nopython=True, cache=True)
-def _calculate_spectrum_density(x, dt):
-    n = x.size
-    T = n * dt
-    df = 1.0 / T
+# # Optimized core calculation function with Numba JIT compilation
+# @numba.jit(nopython=True, cache=True)
+# def _calculate_spectrum_density(x, dt):
+#     n = x.size
+#     T = n * dt
+#     df = 1.0 / T
     
-    # Use objmode for FFT operations that aren't supported in nopython mode
-    with objmode(X='complex128[:]'):
-        X = fft(x)
+#     # Use objmode for FFT operations that aren't supported in nopython mode
+#     with objmode(X='complex128[:]'):
+#         X = fft(x)
     
-    N = X.size
-    half_N = N // 2
+#     N = X.size
+#     half_N = N // 2
     
-    # Calculate absolute values
-    X_abs = np.zeros(half_N)
-    for i in range(half_N):
-        X_abs[i] = abs(X[i])
+#     # Calculate absolute values
+#     X_abs = np.zeros(half_N)
+#     for i in range(half_N):
+#         X_abs[i] = abs(X[i])
     
-    # パワースペクトル PS = |X|^2 [V^2]
-    PS = np.zeros(half_N)
-    for i in range(half_N):
-        PS[i] = X_abs[i]**2 / (N**2)
+#     # パワースペクトル PS = |X|^2 [V^2]
+#     PS = np.zeros(half_N)
+#     for i in range(half_N):
+#         PS[i] = X_abs[i]**2 / (N**2)
     
-    # 片側スペクトルのため、値を2倍しておく(DC成分以外)
-    for i in range(1, half_N):
-        PS[i] = PS[i] * 2.0
+#     # 片側スペクトルのため、値を2倍しておく(DC成分以外)
+#     for i in range(1, half_N):
+#         PS[i] = PS[i] * 2.0
     
-    # パワースペクトル密度 [V^2/Hz]
-    PSD = np.zeros(half_N)
-    for i in range(half_N):
-        PSD[i] = PS[i] / df
+#     # パワースペクトル密度 [V^2/Hz]
+#     PSD = np.zeros(half_N)
+#     for i in range(half_N):
+#         PSD[i] = PS[i] / df
     
-    # PSDの平方根をとる -> スペクトル密度 [V/√Hz]
-    SD_V = np.zeros(half_N)
-    for i in range(half_N):
-        SD_V[i] = np.sqrt(PSD[i])
+#     # PSDの平方根をとる -> スペクトル密度 [V/√Hz]
+#     SD_V = np.zeros(half_N)
+#     for i in range(half_N):
+#         SD_V[i] = np.sqrt(PSD[i])
     
-    return SD_V
+#     return SD_V
 
 def spectrum_density(wave, dt, Rf, Mf, Min, showplot, verbose):
     x = wave       # 1波形
