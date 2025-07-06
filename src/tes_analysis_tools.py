@@ -5,7 +5,7 @@
 # Author      : Yuki Mitsuya
 # Last update : 2024-07-24
 # ===============================
-
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import math, json, logging
@@ -600,7 +600,6 @@ def shaping_ph_spectrum(pulse, timin, timax, dt, cr, rc, showplot, verbose):
     ph_array = np.zeros(n)
     
     for i in range(0, n):
-        
         if i % 1000 == 0 and verbose:
             print(100.0 * i / n, "%  (", i ,"pulses processed )")
 
@@ -610,16 +609,14 @@ def shaping_ph_spectrum(pulse, timin, timax, dt, cr, rc, showplot, verbose):
         
         if showplot and i % 1000 == 0:
             plt.plot(pls)
-            plt.show()
-
+            plt.savefig(f"./logger-spectrum-{i}.png")
     if verbose:
         print("max pulse height = ", np.max(ph_array))
         print("min pulse height = ", np.min(ph_array))
     
     if showplot:
         plt.hist(ph_array, bins=256)
-        #plt.savefig("./hist_simple_ph.png")
-        plt.show()
+        plt.savefig(".hist_simple_ph.png")
 
     # ヒストグラム作成
     hist, bins = np.histogram(ph_array, bins=256)
@@ -717,7 +714,7 @@ def optimal_filter_freq(pulse, model, noise, dt, maxfreq, showplot, verbose):
         if i % 1000 == 0 :
             plt.plot(pls)   #pulse
             plt.plot(model*A) #averaged pulse
-            plt.show()    #off for ssh connected environment
+            plt.savefig(f"./optimal-logger-{i}.png")    #off for ssh connected environment
             
 
     if showplot:

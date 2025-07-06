@@ -31,7 +31,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"
 
 # edit here
 period = "07"
-run = "006"
+run = "008"
 channels = ["1",
             #"2"
             # ,"4"

@@ -81,12 +81,12 @@ def process_optfit(period1, run1, channel1, period2, run2, channel2, cnr, maxfre
     fig2.savefig(f"{plt_dir}/fitted_hist_optimal-filter_p{period1}_r{run1}.png")
     logging.info(f"hist_optimal-filter.png saved to {plt_dir}")
 
-    #Raw spectrum 
-    # ph_array1, histdata1 = shaping_ph_spectrum(pulse, timin, timax, dt, 5e-6, 20e-8, True, False)
-    # np.save(par_dir / f"ph_array_p{period1}_r{run1}.npy", ph_array1)
-    # fig1 = gaussian_fit(-ph_array1)
-    # fig1.savefig(f"{plt_dir}/fitted_hist_raw_p{period1}_r{run1}.png")
-    # logging.info(f"hist_raw.png saved to {plt_dir}")
+    #Raw spectrum height
+    ph_array1, histdata1 = shaping_ph_spectrum(pulse, timin, timax, dt, 5e-6, 20e-8, True, True)
+    np.save(par_dir / f"ph_array_p{period1}_r{run1}.npy", ph_array1)
+    fig1 = gaussian_fit(-ph_array1)
+    fig1.savefig(f"{plt_dir}/fitted_hist_raw_p{period1}_r{run1}.png")
+    logging.info(f"hist_raw.png saved to {plt_dir}")
 
     
 

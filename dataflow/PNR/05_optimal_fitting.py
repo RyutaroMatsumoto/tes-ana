@@ -9,7 +9,7 @@ Directory layout:
     Metadata    : ../../tes01/teststand_metadata/hardware/scope/pXX/rYYY/lecroy_metadata_pXX_rYYY.json
 
 The script exposes three layers:
-    1. **Dynamic orchestration wrapper** -> 05_squid_analysis.py
+    1. **Dynamic orchestration wrapper** -> 05_optimal_fitting.py
     2. **Static processing functions** -> src/tes_analysis_tools.py (by Yuki Mitsuya)
 ------------------------
 
