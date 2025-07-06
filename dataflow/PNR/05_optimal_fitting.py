@@ -46,11 +46,11 @@ channel2 = "1"
 cnr = False
 
 #Opt filter params
-Max_freq = 5*10**7    #max freqency 
+Max_freq = 5*10**6    #max freqency 
 phmin = -0.050      #Lower range of maximum-amplitude[V] in range of timin-timax used for averaging
 phmax = 0.000       #Higher range of maximum-amplitude[V] in range of timin-timax used for averaging
-timin = 160         #minimum time index[int] used for averaging *make sure this interval contains peak
-timax = 250         #maximum time index[int] used for averaging *make sure this interval contains peak
+timin = 180         #minimum time index[int] used for averaging *make sure this interval contains peak
+timax = 500         #maximum time index[int] used for averaging *make sure this interval contains peak
 normalize = True   #Bool
 
 #Options

@@ -36,7 +36,7 @@ channels = ["1",
             #"2"
             # ,"4"
             ]              # Channel number, add "Cn" if needed. For P03, C1=SQUID, C2=HBT, C4= Timing Trigger
-row_index=1
+row_index=1003
 show_single_wave = True
 show_single_10 =False      #compare trap-on & trap-off for 10 single waves
 show_sample_ave = False      #Either show_single or show_sample_ave should be True!
