@@ -8,7 +8,7 @@ Directory layout:
 
 The script exposes two layers:
     1. **Static processing functions** -> process_wave.py
-    2. **Dynamic orchestration wrapper** -> 02_t_domain_analysis.py
+    2. **Dynamic orchestration wrapper** -> 05_rc_filtering.py
 
 Author: Ryutaro Matsumoto - 2025-04-09
 Updated: added pulse fit and time constant calculation function -2025-05-07
@@ -19,46 +19,39 @@ import sys
 import os
 import logging
 from typing import List
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from processing_functions.process_wave_analysis import process_wave
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from processing_functions.process_rcfilt import process_rcfilt
 
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s] %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "tes01"
 
 # edit here
 period = "07"
-run = "008"
+run = "009"
 channels = ["1",
             #"2"
             # ,"4"
-            ]              # Channel number, add "Cn" if needed. For P03, C1=SQUID, C2=HBT, C4= Timing Trigger
+            ]                # Channel number, add "Cn" if needed. For P03, C1=SQUID, C2=HBT, C4= Timing Trigger
 row_index=1005
-show_single_wave = True
-show_single_10 =False      #compare trap-on & trap-off for 10 single waves
-show_sample_ave = False      #Either show_single or show_sample_ave should be True!
-rc = None                  # None for no RC LP filtering, tau for LP filtering
-t_range=[0,20]                  #graph display time range in µs
-reprocess = True            #Must be true for the first time, false for just plot
+rc = 1.0e-6                  # tau for LP filtering
+t_range=[0,20]               #graph display time range in µs
+reprocess = True             #Must be true for the first time, false for just plot
 
 
 
 
 if __name__ == "__main__":
     # perform noise analysis for each channel
-    logging.info(f"Processing wave analysis for C{', '.join(channels)}")
-    process_wave(
+    logging.info(f"Processing rcfilt for C{', '.join(channels)}")
+    process_rcfilt(
         p_id=period,
         r_id=run,
         c_ids=channels,
         base_dir=BASE_DIR,
-        row_index=row_index,
-        show_single_wave=show_single_wave,
-        show_single_10 =show_single_10,
-        show_sample_avg=show_sample_ave,
         rc=rc,
         t_range=t_range,
         reprocess=reprocess

@@ -211,18 +211,18 @@ def plot_waveforms(p_id: str, r_id: str, c_ids: list, base_dir: Path, dt:float, 
 
                             #hardcoding notch for exp
                             logging.info("Processing notch...")
-                            dataname = dataname + "_notch" + "trap"
+                            dataname = dataname  + "rc"
                             notch_range = [         #notch range [Hz, Q-value] Q-value(sharpness of notching) should be <100
-                            (8.6e5,40),
-                            (1.215e6,40),
-                            (1.561e6,40),
-                            (1.904e6,40),
+                            # (8.6e5,40),
+                            # (1.215e6,40),
+                            # (1.561e6,40),
+                            # (1.904e6,40),
                             
                             ]  
                             for f0, Q in notch_range:
                                 b,a = iirnotch(f0, Q, 2.0e8) # third attribute is dt
                                 wave_data = filtfilt(b,a, wave_data)
-                                wave_data = trap_filter(wave_data, dt,20e-9,0 )
+                                wave_data = rc_int(wave_data,2.9e-7,dt)
                                 dataname = dataname + "_" + str(f0) + "Hz"
                                 #filename_suffix += "_with_" + "diff" + "_notched"
                         else:

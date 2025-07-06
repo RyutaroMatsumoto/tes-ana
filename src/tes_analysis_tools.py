@@ -176,7 +176,7 @@ def pulse_gamma(t, A, t0, tau_lp, n, B):
     tt = t - t0
     y = np.zeros_like(tt)
     mask = tt >= 0
-    y[mask] = A * (tt[mask]**(n-1) / np.math.factorial(n-1)) \
+    y[mask] = A * (tt[mask]**(n-1) / math.factorial(n-1)) \
               * np.exp(-tt[mask]/tau_lp) / tau_lp**n
     return y + B
 
@@ -487,7 +487,25 @@ def make_average_pulse(pulse, phmin, phmax, timin, timax, normalize, verbose, sh
     
     # 波高値測定 
     for i in range(0, n):
-        ph[i] = np.min((pulse[i, timin:timax])) #For my case, SQUID signal always has negative signal.
+        # Find the 10 minimum values
+        num_min = min(10, timax - timin)  # Ensure we don't try to find more than available
+        min_indices = np.argpartition(pulse[i, timin:timax], num_min)[:num_min]
+        min_values = pulse[i, timin:timax][min_indices]
+
+        # Calculate the average of the minimum values
+        avg_min = np.mean(min_values)
+
+        # Exclude outstanding values (outliers)
+        std_min = np.std(min_values)
+        threshold = 2 * std_min  # Adjust the threshold as needed
+        filtered_min_values = min_values[np.abs(min_values - avg_min) < threshold]
+
+        # Recalculate the average after excluding outliers
+        if len(filtered_min_values) > 0:
+            ph[i] = np.mean(filtered_min_values)
+        else:
+            ph[i] = avg_min  # If all values are outliers, use the initial average
+
 
     pulse_avg = np.zeros(dp)
     cnt = 0
@@ -632,6 +650,63 @@ def shaping_ph_spectrum(pulse, timin, timax, dt, cr, rc, showplot, verbose):
     return ph_array, hist_data
 
 # ==============================================
+# 波形整形 -> 波高値スペクトル
+# ==============================================
+# 引数
+# pulse[n, dp] : 波形データn個,  1波形あたりdp点
+# timin        : 波高値を求める時間レンジ（index）の下限
+# timax        : 波高値を求める時間レンジ（index）の上限
+# dt           : サンプリング時間 [sec]
+# cr           : CR整形時定数 [sec]
+# rc           : RC整形時定数 [sec]
+
+# 返り値
+# ph_array[n] : n波形の波高値
+# hist_data[nbins, 2] : 1列目bin幅中心値, 2列目ヒストグラムカウント値
+
+def ph_spectrum(pulse, timin, timax, dt, showplot, verbose):
+    print("ph show started ...")
+    
+    n = pulse.shape[0]
+    ph_array = np.zeros(n)
+    
+    for i in range(0, n):
+        if i % 1000 == 0 and verbose:
+            print(100.0 * i / n, "%  (", i ,"pulses processed )")
+        ph_array[i] = np.min( pulse[i, timin:timax] )  #For now, the pulse is downward
+        
+        if showplot and i % 1000 == 0:
+            if not plt.fignum_exists(1):
+                plt.figure(1)
+            plt.plot(pulse[i], label=f"Pulse {i}")
+            plt.xlabel("Time")
+            plt.ylabel("Amplitude")
+            plt.title("Overlaid Pulses")
+            plt.legend()
+            plt.savefig(f"./logger-ph-{i}.png")
+            plt.close()
+    if verbose:
+        print("max pulse height = ", np.max(ph_array))
+        print("min pulse height = ", np.min(ph_array))
+    
+    if showplot:
+        plt.figure()
+        plt.hist(ph_array, bins=256)
+        plt.savefig(".hist_simple_ph.png")
+        plt.close()
+
+    # ヒストグラム作成
+    hist, bins = np.histogram(ph_array, bins=256)
+    bins_center = (bins[:-1] + bins[1:]) / 2
+    
+    hist_data = np.zeros([bins_center.size, 2])
+    hist_data[:, 0] = bins_center
+    hist_data[:, 1] = hist
+    
+    print("ph analysis done.")
+        
+    return ph_array, hist_data
+# ==============================================
 # 最適フィルタ（周波数領域）
 # ==============================================
 # 引数
@@ -663,14 +738,14 @@ def optimal_filter_freq(pulse, model, noise, dt, maxfreq, showplot, verbose):
             X_noise_2 = X_noise_2 + np.abs(np.fft.fft(noise[i, :]))**2
 
     X_noise_2 = X_noise_2 / m
-    if verbose :
-        logging.info(f"|N(f)|^2 = {X_noise_2}")
+    # if verbose :
+    #     logging.info(f"|N(f)|^2 = {X_noise_2}")
 
     # モデルパルスのフーリエ変換の二乗
     X_model = np.fft.fft(model)
     X_model_2 = np.abs(X_model)**2
-    if verbose :
-        logging.info(f"|M(f)|^2 = {X_model_2}")
+    # if verbose :
+    #     logging.info(f"|M(f)|^2 = {X_model_2}")
 
     # 最適フィルタに利用する周波数上限の指定 (Hz)
     # FFTの結果は

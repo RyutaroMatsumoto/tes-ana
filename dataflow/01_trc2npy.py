@@ -44,7 +44,7 @@ channels = [    #Added channels selection function for large-sized data. Only se
     "2"
     ,"4"
 ]
-REPROCESS_WAVEFORM = True         #True for reprocess, False for skip process for waveforms
+REPROCESS_WAVEFORM = False         #True for reprocess, False for skip process for waveforms
 REPROCESS_METADATA = True          #True for reprocess, False for skip process for metadata
 flush = 10                         #Frequency of writing enforcement for RAM clear (set 0 for inside SSD data:tes01)
 threads = 12                        #Threads used for loading (0 is suitable for NVMeSSD or RAM-Disk, if slow, use 2 -> 4)  For Xeon 4110, 12

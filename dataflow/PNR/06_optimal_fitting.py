@@ -42,15 +42,18 @@ period2 = "07"
 run2 = "009"
 channel2 = "1"
 
+rcfilt = True
 # Common Noise Reduction
 cnr = False
 
 #Opt filter params
-Max_freq = 5*10**6    #max freqency 
-phmin = -0.050      #Lower range of maximum-amplitude[V] in range of timin-timax used for averaging
+Max_freq = 5*10**7    #max freqency 
+phmin = -0.1      #Lower range of maximum-amplitude[V] in range of timin-timax used for averaging
 phmax = 0.000       #Higher range of maximum-amplitude[V] in range of timin-timax used for averaging
-timin = 180         #minimum time index[int] used for averaging *make sure this interval contains peak
-timax = 500         #maximum time index[int] used for averaging *make sure this interval contains peak
+timin = 200         #minimum time index[int] used for averaging *make sure this interval contains peak
+timax = 400         #maximum time index[int] used for averaging *make sure this interval contains peak
+tcut = 650          #sample cutting from bottom
+scut = 3000         #sample cutting from bottom
 normalize = True   #Bool
 
 #Options
@@ -65,12 +68,15 @@ if __name__ == "__main__":
         period2 = period2, 
         run2 = run2, 
         channel2 = channel2,  
+        rcfilt = rcfilt,
         cnr = cnr,
         maxfreq = Max_freq, 
         phmin = phmin,
         phmax = phmax,
         timin = timin,
         timax = timax,
+        tcut = tcut,
+        scut = scut,
         normalize = normalize,
         verbose = Verbose,
         base_dir=BASE_DIR

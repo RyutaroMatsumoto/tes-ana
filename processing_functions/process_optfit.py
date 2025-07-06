@@ -13,7 +13,7 @@ import os
 import json
 import src.trap_filter as trap_filter
 from src.gaussian_fitting import gaussian_fit
-from src.tes_analysis_tools import correct_baseline,make_average_pulse,optimal_filter_freq, shaping_ph_spectrum
+from src.tes_analysis_tools import correct_baseline,make_average_pulse,optimal_filter_freq, shaping_ph_spectrum, ph_spectrum
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 logging.basicConfig(
@@ -22,16 +22,18 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-def process_optfit(period1, run1, channel1, period2, run2, channel2, cnr, maxfreq, phmin, phmax, timin, timax, normalize, verbose, base_dir:Path)->None:
+def process_optfit(period1, run1, channel1, period2, run2, channel2, rcfilt, cnr, maxfreq, phmin, phmax, timin, timax, tcut, scut, normalize, verbose, base_dir:Path)->None:
     DEBUG = True
     # create path for pulse and noise
-    pulse_full = np.load(base_dir / "generated_data" / "raw" /f"p{period1}"/ f"r{run1}" / f"C{channel1}" / f"C{channel1}--Trace.npy")    #signal waveform
-    noise_full = np.load(base_dir / "generated_data" / "raw" /f"p{period2}"/ f"r{run2}" / f"C{channel2}" / f"C{channel2}--Trace.npy")    #noise waveform
-    # cut large noise after pulse (for p06)
-    #pulse = pulse_full[..., :-400]
-    #noise = noise_full[..., :-400]
-    pulse = pulse_full
-    noise = noise_full
+    if not rcfilt: 
+        pulse_full = np.load(base_dir / "generated_data" / "raw" /f"p{period1}"/ f"r{run1}" / f"C{channel1}" / f"C{channel1}--Trace.npy")    #signal waveform
+        noise_full = np.load(base_dir / "generated_data" / "raw" /f"p{period2}"/ f"r{run2}" / f"C{channel2}" / f"C{channel2}--Trace.npy")    #noise waveform
+    pulse_full = np.load(base_dir / "generated_data" / "pypar" /"rcfilt"/f"p{period1}"/ f"r{run1}" / f"C{channel1}--Trace.npy")
+    noise_full = np.load(base_dir / "generated_data" / "pypar" /"rcfilt"/f"p{period2}"/ f"r{run2}" / f"C{channel2}--Trace.npy")
+    # cut data
+    pulse = pulse_full[scut:, :-tcut]
+    noise = noise_full[scut:, :-tcut]
+    
     metadata_path1 = base_dir / "teststand_metadata" / "hardware" /"scope" / f"p{period1}" / f"r{run1}" / f"lecroy_metadata_p{period1}_r{run1}.json"
     #load metadata(time interval)
     with open(metadata_path1, 'r') as f:
@@ -82,7 +84,7 @@ def process_optfit(period1, run1, channel1, period2, run2, channel2, cnr, maxfre
     logging.info(f"hist_optimal-filter.png saved to {plt_dir}")
 
     #Raw spectrum height
-    ph_array1, histdata1 = shaping_ph_spectrum(pulse, timin, timax, dt, 5e-6, 20e-8, True, True)
+    ph_array1, histdata1 = ph_spectrum(pulse, timin, timax, dt, True, True)
     np.save(par_dir / f"ph_array_p{period1}_r{run1}.npy", ph_array1)
     fig1 = gaussian_fit(-ph_array1)
     fig1.savefig(f"{plt_dir}/fitted_hist_raw_p{period1}_r{run1}.png")
