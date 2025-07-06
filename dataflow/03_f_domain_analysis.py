@@ -3,13 +3,13 @@
 
 Directory layout:
     npy traces  : ../../tes01/generated_data/raw/pXX/rYYY/CZ/CZ_trace.npy
-    plot dir    : ../../tes01/generated_data/pyplt/noise/pXX/rYYY/CZ
-    params dir  : ../../tes01/generated_data/pypar/noise/pXX/rYYY/CZ
+    plot dir    : ../../tes01/generated_data/pyplt/spectrum/pXX/rYYY/CZ
+    params dir  : ../../tes01/generated_data/pypar/spectrum/pXX/rYYY/CZ
     Metadata    : ../../tes01/teststand_metadata/hardware/scope/pXX/rYYY/lecroy_metadata_pXX_rYYY.json
 
 The script exposes three layers:
     1. **Dynamic orchestration wrapper** -> 03_f_domain_analysis.py
-    2. **Static processing functions** -> process_noise.py
+    2. **Static processing functions** -> process_spectrum.py
     3. **src fft functions** -> fft_funcs.py
 
 ------------------------
@@ -30,7 +30,7 @@ import logging
 from typing import List
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from processing_functions.process_noise_analysis import process_noise, Mode, Padding
+from processing_functions.process_spectrum_analysis import process_spectrum, Mode, Padding
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,13 +52,13 @@ notch = True  # Freqs are hardcoded for now.
 padding_mode: Padding = "5_smt_scupyrfft" # Either of ["5_smt_pyfftw","5_smt_scupyrfft","pwr_2"]
 CPU_THREADS = os.cpu_count() or 1              # NUM of CPUs used for FFT, default to 1 if None
 Batch = 16                        # Num of lines which will be batched together
-Reprocess_noise = True
+Reprocess = True
 
 
 if __name__ == "__main__":
     for channel in channels:
         logging.info(f"Processing noise analysis for C{channel} with threads:{CPU_THREADS} and Batch:{Batch}")
-        process_noise(
+        process_spectrum(
             p_id=period,
             r_id=run,
             c_id=channel,
@@ -67,7 +67,7 @@ if __name__ == "__main__":
             threads=CPU_THREADS,
             Batch=Batch,
             notch = notch,
-            reprocess=Reprocess_noise
+            reprocess=Reprocess
         )
 
 

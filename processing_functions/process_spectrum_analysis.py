@@ -24,8 +24,8 @@ logging.basicConfig(
 Mode = Literal["quick", "full"]
 Padding = Literal["5_smt_pyfftw","5_smt_scupyrfft","pwr_2"]
 
-def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Padding, threads:int, Batch:int, notch:bool, reprocess=True) -> None:
-    logging.info(f"Starting noise processing for p{p_id}_r{r_id}_C{c_id} with padding: {Padding}")
+def process_spectrum(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Padding, threads:int, Batch:int, notch:bool, reprocess=True) -> None:
+    logging.info(f"Starting spectrum processing for p{p_id}_r{r_id}_C{c_id} with padding: {Padding}")
     try:
         #input
         raw_dir = base_dir / "generated_data" / "raw" / f"p{p_id}" / f"r{r_id}" / f"C{c_id}"
@@ -35,8 +35,8 @@ def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Paddi
         logging.info(f"Input paths: raw_dir={raw_dir}, metadata_path={metadata_path}")
         
         #output
-        plt_dir = base_dir / "generated_data" / "pyplt" / "noise" / f"p{p_id}" / f"r{r_id}" / f"C{c_id}"
-        par_dir = base_dir / "generated_data" / "pypar" / "noise" / f"p{p_id}" / f"r{r_id}" / f"C{c_id}"
+        plt_dir = base_dir / "generated_data" / "pyplt" / "spectrum" / f"p{p_id}" / f"r{r_id}" / f"C{c_id}"
+        par_dir = base_dir / "generated_data" / "pypar" / "spectrum" / f"p{p_id}" / f"r{r_id}" / f"C{c_id}"
         # Create output directories if they don't exist
         plt_dir.mkdir(parents=True, exist_ok=True)
         par_dir.mkdir(parents=True, exist_ok=True)
@@ -107,13 +107,14 @@ def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Paddi
         
             # Save plot to plt_dir
             logging.info("Creating plot")
-            plot_file = plt_dir / f"spectrum_C{c_id}.png"
+            plot_file = plt_dir / f"{type_}_spectrum_C{c_id}.png"
             plt.savefig(plot_file, dpi=300, bbox_inches='tight')
             logging.info(f"Plot saved to {plot_file}")
             
             # Save data to par_dir
             logging.info("Saving data")
-            data_file = par_dir / f"spectrum_data_C{c_id}.npz"
+            data_file = par_dir / f"{type_}_spectrum_data_C{c_id}.npz"
+            
             np.savez(data_file,
                     frequencies=freq,
                     mean_spectrum_density=mean_sdv,
@@ -121,8 +122,8 @@ def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Paddi
             logging.info(f"Data saved to {data_file}")
             
             # Show plot if in interactive mode
-            plt.show()
-            plt.close()  # Close the plot to avoid memory issues
+            #plt.show()
+            #plt.close()  # Close the plot to avoid memory issues
             logging.info("Processing completed successfully")
         else:
             logging.error("No spectrum density data was collected. Check previous errors.")
@@ -137,7 +138,7 @@ def process_noise(p_id: str, r_id: str, c_id: str, base_dir: Path, padding:Paddi
         append_metadata(meta, metadata_time_path)
         logging.info(f'time data saved to {metadata_time_path}')
     except Exception as e:
-        logging.error(f"Error in process_noise: {str(e)}")
+        logging.error(f"Error in process_spectrum: {str(e)}")
         import traceback
         logging.error(traceback.format_exc())
 
