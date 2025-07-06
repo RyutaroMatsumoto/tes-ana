@@ -38,7 +38,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent / "tes01"         #tes0
 
 # edit here
 period = "07"
-run = "009"
+run = "008"
 channels = [    #Added channels selection function for large-sized data. Only selected channels will be converted.
     "1",       #If none, all the channels will be converted.
     "2"
