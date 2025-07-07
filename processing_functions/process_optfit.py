@@ -49,7 +49,7 @@ def process_optfit(period1, run1, channel1, period2, run2, channel2, rcfilt, cnr
     par_dir.mkdir(parents=True, exist_ok=True)
     #original process for opt filter
     if not cnr:
-        average = make_average_pulse(pulse, phmin, phmax, timin, timax, normalize, verbose, False)
+        average = make_average_pulse(pulse, phmin, phmax, timin, timax, normalize, verbose, True)
     #Common noise reduction for switching noise
     if cnr:
         noise_ave = np.mean(noise, axis=0)

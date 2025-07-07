@@ -31,13 +31,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "tes01"
 
 # edit here
 period = "07"
-run = "009"
+run = "005"
 channels = ["1",
             #"2"
             # ,"4"
             ]                # Channel number, add "Cn" if needed. For P03, C1=SQUID, C2=HBT, C4= Timing Trigger
 row_index=1005
-rc = 1.0e-6                  # tau for LP filtering
+rc = 1.0e-4                  # tau for LP filtering
 t_range=[0,20]               #graph display time range in µs
 reprocess = True             #Must be true for the first time, false for just plot
 
