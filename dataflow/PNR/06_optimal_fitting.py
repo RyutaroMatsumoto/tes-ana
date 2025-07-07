@@ -35,11 +35,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "tes01"
 # edit here
 #pulse
 period1 = "07"
-run1 = "006"
+run1 = "008"
 channel1 = "1"  # Channel number, add "Cn" if needed.  #For P03,C1 is SQUID and C2 is HBT
 #noise
 period2 = "07"
-run2 = "005"
+run2 = "009"
 channel2 = "1"
 
 rcfilt = True
@@ -49,7 +49,7 @@ cnr = False
 #Opt filter params
 Max_freq = 5*10**7    #max freqency 
 phmin = -0.1      #Lower range of maximum-amplitude[V] in range of timin-timax used for averaging
-phmax = 0.000       #Higher range of maximum-amplitude[V] in range of timin-timax used for averaging
+phmax = 0.005       #Higher range of maximum-amplitude[V] in range of timin-timax used for averaging
 timin = 200         #minimum time index[int] used for averaging *make sure this interval contains peak
 timax = 300         #maximum time index[int] used for averaging *make sure this interval contains peak
 tcut = 600          #sample cutting from bottom
